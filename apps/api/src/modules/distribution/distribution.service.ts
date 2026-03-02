@@ -1,0 +1,249 @@
+import { Injectable, NotFoundException, ForbiddenException, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { PrismaService } from '../../infrastructure/prisma/prisma.service';
+import { CloudTasksService } from '../../infrastructure/cloudtasks/cloudtasks.service';
+import { GcsService } from '../../infrastructure/gcs/gcs.service';
+import { AuditService } from '../../common/audit/audit.service';
+import {
+  AuditAction,
+  DistributionFormat,
+  DistributionJobStatus,
+  DistributionPlatform,
+  UserRole,
+} from '@prisma/client';
+import OpenAI from 'openai';
+
+@Injectable()
+export class DistributionService {
+  private readonly logger = new Logger(DistributionService.name);
+  private openai: OpenAI | null = null;
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly cloudTasks: CloudTasksService,
+    private readonly gcs: GcsService,
+    private readonly audit: AuditService,
+    private readonly config: ConfigService,
+  ) {}
+
+  private getOpenAI(): OpenAI {
+    if (!this.openai) {
+      this.openai = new OpenAI({
+        apiKey: this.config.get<string>('OPENAI_API_KEY', ''),
+      });
+    }
+    return this.openai;
+  }
+
+  async createJob(params: {
+    episodeId: string;
+    requestedBy: string;
+    requestedByRole: UserRole;
+    targetFormat: DistributionFormat;
+    targetPlatform: DistributionPlatform;
+    inputAssetId?: string;
+  }) {
+    const episode = await this.prisma.episode.findUnique({ where: { id: params.episodeId } });
+    if (!episode) throw new NotFoundException('Episode not found');
+
+    // Authors can only create jobs for series they own
+    if (params.requestedByRole === UserRole.author) {
+      const series = await this.prisma.series.findUnique({ where: { id: episode.seriesId } });
+      if (series?.createdBy !== params.requestedBy) {
+        throw new ForbiddenException('Authors can only distribute their own series');
+      }
+    }
+
+    const job = await this.prisma.distributionJob.create({
+      data: {
+        episodeId: params.episodeId,
+        requestedBy: params.requestedBy,
+        targetFormat: params.targetFormat,
+        targetPlatform: params.targetPlatform,
+        inputAssetId: params.inputAssetId ?? null,
+        status: DistributionJobStatus.pending,
+      },
+    });
+
+    // Enqueue processing task
+    const queueName = this.config.get<string>('CLOUD_TASKS_DISTRIBUTION_QUEUE', '');
+    await this.cloudTasks.enqueueTask(queueName, {
+      url: `/v1/internal/distribution/process/${job.id}`,
+      body: { jobId: job.id },
+    });
+
+    await this.audit.log({
+      actorId: params.requestedBy,
+      actorRole: params.requestedByRole,
+      action: AuditAction.distribution_job_create,
+      targetType: 'distribution_job',
+      targetId: job.id,
+      payload: { episodeId: params.episodeId, targetFormat: params.targetFormat, targetPlatform: params.targetPlatform },
+    });
+
+    return job;
+  }
+
+  async processJob(jobId: string) {
+    const job = await this.prisma.distributionJob.findUnique({
+      where: { id: jobId },
+      include: { episode: { include: { series: true } }, inputAsset: true },
+    });
+
+    if (!job) return;
+    if (job.status !== DistributionJobStatus.pending) return;
+
+    await this.prisma.distributionJob.update({
+      where: { id: jobId },
+      data: { status: DistributionJobStatus.processing },
+    });
+
+    try {
+      // 1. Generate AI copy
+      const { description, titleVariants, tags, captionPlaceholder } =
+        await this.generateAICopy(
+          job.episode.title,
+          job.episode.description ?? '',
+          job.episode.series.title,
+          job.targetPlatform,
+        );
+
+      // 2. Format conversion (stub — Phase 7 implements actual ffmpeg/transcoder)
+      const outputGcsKey = `jobs/${jobId}/video_${job.targetFormat}.mp4`;
+      this.logger.log(`[STUB] Format conversion for job ${jobId} → ${outputGcsKey}`);
+
+      // 3. Update job with AI results
+      await this.prisma.distributionJob.update({
+        where: { id: jobId },
+        data: {
+          status: DistributionJobStatus.completed,
+          completedAt: new Date(),
+          outputGcsKey,
+          aiDescription: description,
+          aiTitleVariants: titleVariants as object,
+          aiTags: tags,
+          aiCaption: captionPlaceholder,
+        },
+      });
+
+      await this.audit.log({
+        action: AuditAction.distribution_job_complete,
+        targetType: 'distribution_job',
+        targetId: jobId,
+        payload: { outputGcsKey },
+      });
+    } catch (err) {
+      this.logger.error(`Distribution job ${jobId} failed`, err);
+      await this.prisma.distributionJob.update({
+        where: { id: jobId },
+        data: {
+          status: DistributionJobStatus.failed,
+          errorMessage: err instanceof Error ? err.message : String(err),
+        },
+      });
+    }
+  }
+
+  private async generateAICopy(
+    episodeTitle: string,
+    episodeDescription: string,
+    seriesTitle: string,
+    platform: DistributionPlatform,
+  ) {
+    const openai = this.getOpenAI();
+    const apiKey = this.config.get<string>('OPENAI_API_KEY', '');
+
+    if (!apiKey) {
+      // Return stubs if no API key configured
+      return {
+        description: `Watch ${episodeTitle} from ${seriesTitle}!`,
+        titleVariants: [episodeTitle, `${seriesTitle}: ${episodeTitle}`, `[New] ${episodeTitle}`],
+        tags: [seriesTitle.toLowerCase().replace(/\s+/g, ''), 'romantasy', 'newrelease'],
+        captionPlaceholder: '[Captions to be generated]',
+      };
+    }
+
+    const platformHints: Record<DistributionPlatform, string> = {
+      youtube: 'YouTube video description (300 chars, SEO-optimized, include timestamps if relevant)',
+      instagram: 'Instagram caption (150 chars, engaging, with emoji, call to action)',
+      tiktok: 'TikTok caption (80 chars, trendy, include relevant hashtags)',
+      internal: 'Internal distribution description',
+    };
+
+    const prompt = `
+You are a social media content writer for a romantasy streaming platform called FatedWorld.
+Generate content for a new episode release.
+
+Series: "${seriesTitle}"
+Episode: "${episodeTitle}"
+Description: "${episodeDescription}"
+Platform: ${platform} (${platformHints[platform]})
+
+Return a JSON object with:
+{
+  "description": "platform-appropriate description",
+  "titleVariants": ["option 1", "option 2", "option 3"],
+  "tags": ["tag1", "tag2", ... (up to 10)],
+  "thumbnailTextSuggestions": ["short text 1", "short text 2", "short text 3"]
+}
+`.trim();
+
+    try {
+      const response = await openai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [{ role: 'user', content: prompt }],
+        response_format: { type: 'json_object' },
+        max_tokens: 500,
+      });
+
+      const content = response.choices[0]?.message?.content ?? '{}';
+      const parsed = JSON.parse(content);
+
+      return {
+        description: parsed.description ?? '',
+        titleVariants: parsed.titleVariants ?? [episodeTitle],
+        tags: parsed.tags ?? [],
+        captionPlaceholder: '[Whisper caption generation coming in Phase 7]',
+      };
+    } catch {
+      return {
+        description: `${episodeTitle} — now streaming on FatedWorld`,
+        titleVariants: [episodeTitle],
+        tags: ['romantasy', 'fatedworld'],
+        captionPlaceholder: '[Caption generation failed]',
+      };
+    }
+  }
+
+  async listJobs(requestedBy: string, role: UserRole, episodeId?: string) {
+    const isAdmin = [UserRole.content_admin, UserRole.superadmin].includes(role);
+
+    return this.prisma.distributionJob.findMany({
+      where: {
+        ...(!isAdmin && { requestedBy }),
+        ...(episodeId && { episodeId }),
+      },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        episode: { select: { id: true, title: true, seriesId: true } },
+      },
+      take: 50,
+    });
+  }
+
+  async getJob(jobId: string, requestedBy: string, role: UserRole) {
+    const job = await this.prisma.distributionJob.findUnique({
+      where: { id: jobId },
+      include: { episode: { select: { id: true, title: true, seriesId: true, series: true } } },
+    });
+
+    if (!job) throw new NotFoundException('Job not found');
+
+    const isAdmin = [UserRole.content_admin, UserRole.superadmin].includes(role);
+    if (!isAdmin && job.requestedBy !== requestedBy) {
+      throw new ForbiddenException('Not authorized to view this job');
+    }
+
+    return job;
+  }
+}

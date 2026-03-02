@@ -1,0 +1,761 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────
+
+enum UserRole {
+  user
+  approved_member
+  moderator
+  author
+  content_admin
+  analytics_admin
+  superadmin
+}
+
+enum SeriesStatus {
+  draft
+  published
+  completed
+  removed
+}
+
+enum EpisodeStatus {
+  draft
+  scheduled
+  published
+  unpublished
+  removed
+}
+
+enum AssetVersionType {
+  main
+  teaser
+  directors_cut
+  bonus
+  replacement
+}
+
+enum LedgerEntryType {
+  iap_purchase
+  unlock_debit
+  refund_reversal
+  admin_adjustment
+  promo_credit
+}
+
+enum IAPPlatform {
+  apple
+  google
+}
+
+enum IAPTransactionStatus {
+  pending
+  validated
+  credited
+  refunded
+  failed
+}
+
+enum EntitlementType {
+  episode_unlock
+  season_pass
+  early_access
+  author_access
+}
+
+enum ThreadType {
+  global
+  series
+  episode
+  author_qa
+}
+
+enum VoteTargetType {
+  thread
+  reply
+}
+
+enum WikiRevisionStatus {
+  pending
+  approved
+  rejected
+}
+
+enum ModerationActionType {
+  ban
+  timeout
+  unban
+  delete_content
+  restore_content
+  pin
+  unpin
+  lock
+  approve_wiki
+  reject_wiki
+  warn
+}
+
+enum ModerationTargetType {
+  user
+  thread
+  reply
+  wiki_revision
+  wiki_page
+}
+
+enum AbuseReportCategory {
+  spam
+  harassment
+  hate_speech
+  misinformation
+  spoiler
+  other
+}
+
+enum AbuseReportStatus {
+  open
+  under_review
+  resolved_actioned
+  resolved_dismissed
+}
+
+enum PushPlatform {
+  ios
+  android
+}
+
+enum ExperimentType {
+  thumbnail_ab
+  content_ab
+  feature_flag
+}
+
+enum ExperimentStatus {
+  draft
+  active
+  paused
+  completed
+}
+
+enum DistributionFormat {
+  vertical_9_16
+  landscape_16_9
+  square_1_1
+}
+
+enum DistributionPlatform {
+  youtube
+  instagram
+  tiktok
+  internal
+}
+
+enum DistributionJobStatus {
+  pending
+  processing
+  completed
+  failed
+}
+
+enum NotificationPreferenceType {
+  episode_drops
+  countdown_reminders
+  community_replies
+  author_qa
+  promotions
+}
+
+enum AuditAction {
+  user_register
+  user_login
+  user_ban
+  user_unban
+  user_timeout
+  user_delete
+  series_create
+  series_update
+  series_delete
+  series_restore
+  episode_create
+  episode_update
+  episode_publish
+  episode_schedule
+  episode_delete
+  episode_restore
+  episode_unpublish
+  token_credit
+  token_debit
+  token_refund_reversal_auto
+  token_refund_reversal_manual
+  token_admin_adjustment
+  entitlement_grant
+  entitlement_revoke
+  wiki_approve
+  wiki_reject
+  content_delete
+  content_restore
+  content_pin
+  content_lock
+  report_resolve
+  iap_validate
+  iap_refund
+  playback_url_generate
+  distribution_job_create
+  distribution_job_complete
+  admin_action
+}
+
+// ─────────────────────────────────────────────
+// USERS & AUTH
+// ─────────────────────────────────────────────
+
+model User {
+  id                String    @id @default(uuid()) @db.Uuid
+  username          String    @unique
+  displayName       String?   @map("display_name")
+  email             String    @unique
+  emailVerified     Boolean   @default(false) @map("email_verified")
+  passwordHash      String?   @map("password_hash")
+  avatarUrl         String?   @map("avatar_url")
+  bio               String?
+  role              UserRole  @default(user)
+  isVerifiedAuthor  Boolean   @default(false) @map("is_verified_author")
+  isBanned          Boolean   @default(false) @map("is_banned")
+  banExpiresAt      DateTime? @map("ban_expires_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  deletedAt         DateTime? @map("deleted_at")
+
+  refreshTokens          RefreshToken[]
+  wallet                 TokenWallet?
+  ledgerEntries          TokenLedgerEntry[]
+  iapTransactions        IAPTransaction[]
+  entitlements           Entitlement[]
+  threads                Thread[]
+  threadReplies          ThreadReply[]
+  votes                  Vote[]
+  wikiPages              WikiPage[]
+  wikiRevisions          WikiRevision[]
+  moderationActionsActor ModerationAction[] @relation("ModerationActor")
+  abuseReports           AbuseReport[]      @relation("AbuseReporter")
+  abuseReportsAssigned   AbuseReport[]      @relation("AbuseAssignee")
+  abuseReportsResolved   AbuseReport[]      @relation("AbuseResolver")
+  pushTokens             PushToken[]
+  notificationPrefs      NotificationPreference?
+  experimentAssignments  ExperimentAssignment[]
+  distributionJobs       DistributionJob[]
+  seriesCreated          Series[]           @relation("SeriesCreator")
+  episodeAssetsUploaded  EpisodeAsset[]
+  wikiReviewsGiven       WikiRevision[]     @relation("WikiReviewer")
+  moderationActionsTarget ModerationAction[] @relation("ModerationTargetUser")
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash")
+  deviceId  String?   @map("device_id")
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+// ─────────────────────────────────────────────
+// CONTENT
+// ─────────────────────────────────────────────
+
+model Series {
+  id            String       @id @default(uuid()) @db.Uuid
+  title         String
+  slug          String       @unique
+  description   String?
+  genreTags     String[]     @map("genre_tags")
+  coverImageUrl String?      @map("cover_image_url")
+  status        SeriesStatus @default(draft)
+  isDeleted     Boolean      @default(false) @map("is_deleted")
+  deletedAt     DateTime?    @map("deleted_at")
+  createdBy     String       @map("created_by") @db.Uuid
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  creator      User          @relation("SeriesCreator", fields: [createdBy], references: [id])
+  seasons      Season[]
+  episodes     Episode[]
+  threads      Thread[]
+  wikiPages    WikiPage[]
+  entitlements Entitlement[]
+
+  @@map("series")
+}
+
+model Season {
+  id          String   @id @default(uuid()) @db.Uuid
+  seriesId    String   @map("series_id") @db.Uuid
+  number      Int
+  title       String?
+  description String?
+  arcLabel    String?  @map("arc_label")
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  series       Series        @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  episodes     Episode[]
+  entitlements Entitlement[]
+
+  @@unique([seriesId, number])
+  @@map("seasons")
+}
+
+model Episode {
+  id              String        @id @default(uuid()) @db.Uuid
+  seriesId        String        @map("series_id") @db.Uuid
+  seasonId        String?       @map("season_id") @db.Uuid
+  number          Int
+  title           String
+  description     String?
+  durationSeconds Int?          @map("duration_seconds")
+  isGated         Boolean       @default(false) @map("is_gated")
+  tokenCost       Int           @default(0) @map("token_cost")
+  status          EpisodeStatus @default(draft)
+  scheduledAt     DateTime?     @map("scheduled_at")
+  publishedAt     DateTime?     @map("published_at")
+  isDeleted       Boolean       @default(false) @map("is_deleted")
+  deletedAt       DateTime?     @map("deleted_at")
+  sortOrder       Int           @default(0) @map("sort_order")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  series           Series            @relation(fields: [seriesId], references: [id])
+  season           Season?           @relation(fields: [seasonId], references: [id])
+  assets           EpisodeAsset[]
+  threads          Thread[]
+  entitlements     Entitlement[]
+  distributionJobs DistributionJob[]
+
+  @@index([seriesId, sortOrder])
+  @@index([status, scheduledAt])
+  @@map("episodes")
+}
+
+model EpisodeAsset {
+  id            String           @id @default(uuid()) @db.Uuid
+  episodeId     String           @map("episode_id") @db.Uuid
+  versionType   AssetVersionType @default(main) @map("version_type")
+  versionNumber Int              @default(1) @map("version_number")
+  gcsBucket     String           @map("gcs_bucket")
+  gcsObjectKey  String           @map("gcs_object_key")
+  fileSizeBytes BigInt?          @map("file_size_bytes")
+  mimeType      String?          @map("mime_type")
+  isActive      Boolean          @default(true) @map("is_active")
+  uploadedBy    String           @map("uploaded_by") @db.Uuid
+  createdAt     DateTime         @default(now()) @map("created_at")
+
+  episode          Episode           @relation(fields: [episodeId], references: [id])
+  uploader         User              @relation(fields: [uploadedBy], references: [id])
+  distributionJobs DistributionJob[] @relation("DistributionInputAsset")
+
+  @@index([episodeId, isActive])
+  @@map("episode_assets")
+}
+
+// ─────────────────────────────────────────────
+// TOKEN ECONOMY
+// ─────────────────────────────────────────────
+
+model TokenWallet {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @unique @map("user_id") @db.Uuid
+  balance   BigInt   @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("token_wallets")
+}
+
+model TokenLedgerEntry {
+  id             String          @id @default(uuid()) @db.Uuid
+  userId         String          @map("user_id") @db.Uuid
+  amount         BigInt
+  balanceAfter   BigInt          @map("balance_after")
+  type           LedgerEntryType
+  referenceId    String?         @map("reference_id")
+  idempotencyKey String          @unique @map("idempotency_key")
+  metadata       Json?
+  createdAt      DateTime        @default(now()) @map("created_at")
+  createdBy      String?         @map("created_by") @db.Uuid
+
+  user         User          @relation(fields: [userId], references: [id])
+  entitlements Entitlement[]
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("token_ledger")
+}
+
+model IAPTransaction {
+  id                  String               @id @default(uuid()) @db.Uuid
+  userId              String               @map("user_id") @db.Uuid
+  platform            IAPPlatform
+  storeTransactionId  String               @unique @map("store_transaction_id")
+  productId           String               @map("product_id")
+  tokenAmount         Int                  @map("token_amount")
+  amountUsdCents      Int?                 @map("amount_usd_cents")
+  receiptData         String?              @map("receipt_data")
+  validationResponse  Json?                @map("validation_response")
+  status              IAPTransactionStatus @default(pending)
+  idempotencyKey      String               @unique @map("idempotency_key")
+  refundedAt          DateTime?            @map("refunded_at")
+  createdAt           DateTime             @default(now()) @map("created_at")
+  updatedAt           DateTime             @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("iap_transactions")
+}
+
+// ─────────────────────────────────────────────
+// ENTITLEMENTS
+// ─────────────────────────────────────────────
+
+model Entitlement {
+  id             String          @id @default(uuid()) @db.Uuid
+  userId         String          @map("user_id") @db.Uuid
+  type           EntitlementType
+  seriesId       String?         @map("series_id") @db.Uuid
+  seasonId       String?         @map("season_id") @db.Uuid
+  episodeId      String?         @map("episode_id") @db.Uuid
+  grantedAt      DateTime        @default(now()) @map("granted_at")
+  revokedAt      DateTime?       @map("revoked_at")
+  revokeReason   String?         @map("revoke_reason")
+  ledgerEntryId  String?         @map("ledger_entry_id") @db.Uuid
+  createdAt      DateTime        @default(now()) @map("created_at")
+
+  user         User              @relation(fields: [userId], references: [id])
+  series       Series?           @relation(fields: [seriesId], references: [id])
+  season       Season?           @relation(fields: [seasonId], references: [id])
+  episode      Episode?          @relation(fields: [episodeId], references: [id])
+  ledgerEntry  TokenLedgerEntry? @relation(fields: [ledgerEntryId], references: [id])
+
+  @@index([userId, episodeId])
+  @@index([userId, seasonId, type])
+  @@index([userId, seriesId, type])
+  @@map("entitlements")
+}
+
+// ─────────────────────────────────────────────
+// COMMUNITY
+// ─────────────────────────────────────────────
+
+model Thread {
+  id        String     @id @default(uuid()) @db.Uuid
+  type      ThreadType
+  seriesId  String?    @map("series_id") @db.Uuid
+  episodeId String?    @map("episode_id") @db.Uuid
+  authorId  String     @map("author_id") @db.Uuid
+  title     String
+  body      String
+  isPinned  Boolean    @default(false) @map("is_pinned")
+  isLocked  Boolean    @default(false) @map("is_locked")
+  isDeleted Boolean    @default(false) @map("is_deleted")
+  deletedAt DateTime?  @map("deleted_at")
+  voteCount Int        @default(0) @map("vote_count")
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+
+  author  User          @relation(fields: [authorId], references: [id])
+  series  Series?       @relation(fields: [seriesId], references: [id])
+  episode Episode?      @relation(fields: [episodeId], references: [id])
+  replies ThreadReply[]
+
+  @@index([seriesId, createdAt(sort: Desc)])
+  @@index([episodeId])
+  @@index([type, createdAt(sort: Desc)])
+  @@map("threads")
+}
+
+model ThreadReply {
+  id        String    @id @default(uuid()) @db.Uuid
+  threadId  String    @map("thread_id") @db.Uuid
+  parentId  String?   @map("parent_id") @db.Uuid
+  authorId  String    @map("author_id") @db.Uuid
+  body      String
+  isDeleted Boolean   @default(false) @map("is_deleted")
+  deletedAt DateTime? @map("deleted_at")
+  voteCount Int       @default(0) @map("vote_count")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  thread  Thread        @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  parent  ThreadReply?  @relation("ReplyNesting", fields: [parentId], references: [id])
+  children ThreadReply[] @relation("ReplyNesting")
+  author  User          @relation(fields: [authorId], references: [id])
+
+  @@index([threadId, createdAt])
+  @@map("thread_replies")
+}
+
+model Vote {
+  userId     String         @map("user_id") @db.Uuid
+  targetType VoteTargetType @map("target_type")
+  targetId   String         @map("target_id") @db.Uuid
+  value      Int
+  createdAt  DateTime       @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, targetType, targetId])
+  @@map("votes")
+}
+
+// ─────────────────────────────────────────────
+// WIKI
+// ─────────────────────────────────────────────
+
+model WikiPage {
+  id           String   @id @default(uuid()) @db.Uuid
+  slug         String   @unique
+  title        String
+  seriesId     String?  @map("series_id") @db.Uuid
+  taxonomyPath String?  @map("taxonomy_path")
+  tags         String[]
+  isLocked     Boolean  @default(false) @map("is_locked")
+  isPublished  Boolean  @default(false) @map("is_published")
+  currentRevId String?  @map("current_rev_id") @db.Uuid
+  createdBy    String   @map("created_by") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  series    Series?        @relation(fields: [seriesId], references: [id])
+  creator   User           @relation(fields: [createdBy], references: [id])
+  revisions WikiRevision[]
+
+  @@index([seriesId])
+  @@map("wiki_pages")
+}
+
+model WikiRevision {
+  id         String             @id @default(uuid()) @db.Uuid
+  pageId     String             @map("page_id") @db.Uuid
+  body       String
+  authorId   String             @map("author_id") @db.Uuid
+  status     WikiRevisionStatus @default(pending)
+  reviewedBy String?            @map("reviewed_by") @db.Uuid
+  reviewedAt DateTime?          @map("reviewed_at")
+  reviewNote String?            @map("review_note")
+  versionNum Int                @map("version_num")
+  createdAt  DateTime           @default(now()) @map("created_at")
+
+  page     WikiPage @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  author   User     @relation(fields: [authorId], references: [id])
+  reviewer User?    @relation("WikiReviewer", fields: [reviewedBy], references: [id])
+
+  @@index([pageId, status])
+  @@index([status, createdAt])
+  @@map("wiki_revisions")
+}
+
+// ─────────────────────────────────────────────
+// MODERATION
+// ─────────────────────────────────────────────
+
+model ModerationAction {
+  id           String               @id @default(uuid()) @db.Uuid
+  actorId      String               @map("actor_id") @db.Uuid
+  targetUserId String?              @map("target_user_id") @db.Uuid
+  targetType   ModerationTargetType @map("target_type")
+  targetId     String               @map("target_id") @db.Uuid
+  action       ModerationActionType
+  reason       String?
+  durationSecs Int?                 @map("duration_secs")
+  metadata     Json?
+  createdAt    DateTime             @default(now()) @map("created_at")
+
+  actor      User  @relation("ModerationActor", fields: [actorId], references: [id])
+  targetUser User? @relation("ModerationTargetUser", fields: [targetUserId], references: [id])
+
+  @@index([targetUserId])
+  @@index([actorId, createdAt(sort: Desc)])
+  @@map("moderation_actions")
+}
+
+model AbuseReport {
+  id           String            @id @default(uuid()) @db.Uuid
+  reporterId   String            @map("reporter_id") @db.Uuid
+  targetType   ModerationTargetType @map("target_type")
+  targetId     String            @map("target_id") @db.Uuid
+  category     AbuseReportCategory
+  description  String?
+  status       AbuseReportStatus @default(open)
+  assignedTo   String?           @map("assigned_to") @db.Uuid
+  resolvedAt   DateTime?         @map("resolved_at")
+  resolvedBy   String?           @map("resolved_by") @db.Uuid
+  resolution   String?
+  createdAt    DateTime          @default(now()) @map("created_at")
+
+  reporter User  @relation("AbuseReporter", fields: [reporterId], references: [id])
+  assignee User? @relation("AbuseAssignee", fields: [assignedTo], references: [id])
+  resolver User? @relation("AbuseResolver", fields: [resolvedBy], references: [id])
+
+  @@index([status, createdAt])
+  @@map("abuse_reports")
+}
+
+// ─────────────────────────────────────────────
+// NOTIFICATIONS
+// ─────────────────────────────────────────────
+
+model PushToken {
+  id         String       @id @default(uuid()) @db.Uuid
+  userId     String       @map("user_id") @db.Uuid
+  platform   PushPlatform
+  fcmToken   String       @map("fcm_token")
+  deviceId   String?      @map("device_id")
+  isActive   Boolean      @default(true) @map("is_active")
+  lastUsedAt DateTime?    @map("last_used_at")
+  createdAt  DateTime     @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isActive])
+  @@map("push_tokens")
+}
+
+model NotificationPreference {
+  userId              String   @id @map("user_id") @db.Uuid
+  episodeDrops        Boolean  @default(true) @map("episode_drops")
+  countdownReminders  Boolean  @default(true) @map("countdown_reminders")
+  communityReplies    Boolean  @default(true) @map("community_replies")
+  authorQa            Boolean  @default(true) @map("author_qa")
+  promotions          Boolean  @default(false)
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notification_preferences")
+}
+
+// ─────────────────────────────────────────────
+// EXPERIMENTATION
+// ─────────────────────────────────────────────
+
+model Experiment {
+  id             String           @id @default(uuid()) @db.Uuid
+  name           String           @unique
+  description    String?
+  type           ExperimentType
+  status         ExperimentStatus @default(draft)
+  trafficSplit   Json             @map("traffic_split")
+  metricBindings Json?            @map("metric_bindings")
+  startsAt       DateTime?        @map("starts_at")
+  endsAt         DateTime?        @map("ends_at")
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+
+  assignments ExperimentAssignment[]
+
+  @@map("experiments")
+}
+
+model ExperimentAssignment {
+  userId       String   @map("user_id") @db.Uuid
+  experimentId String   @map("experiment_id") @db.Uuid
+  variant      String
+  assignedAt   DateTime @default(now()) @map("assigned_at")
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  experiment Experiment @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+
+  @@id([userId, experimentId])
+  @@map("experiment_assignments")
+}
+
+// ─────────────────────────────────────────────
+// DISTRIBUTION
+// ─────────────────────────────────────────────
+
+model DistributionJob {
+  id                  String               @id @default(uuid()) @db.Uuid
+  episodeId           String               @map("episode_id") @db.Uuid
+  requestedBy         String               @map("requested_by") @db.Uuid
+  targetFormat        DistributionFormat   @map("target_format")
+  targetPlatform      DistributionPlatform @map("target_platform")
+  status              DistributionJobStatus @default(pending)
+  inputAssetId        String?              @map("input_asset_id") @db.Uuid
+  outputGcsKey        String?              @map("output_gcs_key")
+  aiCaption           String?              @map("ai_caption")
+  aiDescription       String?              @map("ai_description")
+  aiTags              String[]             @map("ai_tags")
+  aiTitleVariants     Json?                @map("ai_title_variants")
+  errorMessage        String?              @map("error_message")
+  createdAt           DateTime             @default(now()) @map("created_at")
+  completedAt         DateTime?            @map("completed_at")
+
+  episode    Episode       @relation(fields: [episodeId], references: [id])
+  requester  User          @relation(fields: [requestedBy], references: [id])
+  inputAsset EpisodeAsset? @relation("DistributionInputAsset", fields: [inputAssetId], references: [id])
+
+  @@index([requestedBy, createdAt(sort: Desc)])
+  @@index([status])
+  @@map("distribution_jobs")
+}
+
+// ─────────────────────────────────────────────
+// AUDIT LOG (append-only)
+// ─────────────────────────────────────────────
+
+model AuditLog {
+  id         String      @id @default(uuid()) @db.Uuid
+  actorId    String?     @map("actor_id") @db.Uuid
+  actorRole  String?     @map("actor_role")
+  action     AuditAction
+  targetType String?     @map("target_type")
+  targetId   String?     @map("target_id")
+  payload    Json?
+  ipAddress  String?     @map("ip_address")
+  userAgent  String?     @map("user_agent")
+  createdAt  DateTime    @default(now()) @map("created_at")
+
+  @@index([actorId, createdAt(sort: Desc)])
+  @@index([targetType, targetId])
+  @@index([action, createdAt(sort: Desc)])
+  @@map("audit_log")
+}
+
+// ─────────────────────────────────────────────
+// ANALYTICS SNAPSHOTS (pre-aggregated for fast API)
+// ─────────────────────────────────────────────
+
+model AnalyticsDailySnapshot {
+  id                String   @id @default(uuid()) @db.Uuid
+  date              DateTime @db.Date
+  seriesId          String?  @map("series_id") @db.Uuid
+  newUsers          Int      @default(0) @map("new_users")
+  totalViews        Int      @default(0) @map("total_views")
+  totalWatchMinutes BigInt   @default(0) @map("total_watch_minutes")
+  tokensSold        BigInt   @default(0) @map("tokens_sold")
+  unlocks           Int      @default(0)
+  completionRate    Float?   @map("completion_rate")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  @@unique([date, seriesId])
+  @@index([seriesId, date(sort: Desc)])
+  @@map("analytics_daily_snapshots")
+}

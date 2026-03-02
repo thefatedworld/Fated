@@ -1,0 +1,95 @@
+steps:
+  # Install pnpm and deps
+  - name: node:20-alpine
+    id: install
+    entrypoint: sh
+    args:
+      - -c
+      - |
+        corepack enable && corepack prepare pnpm@9.0.0 --activate
+        pnpm install --frozen-lockfile
+        pnpm --filter @fated/api db:generate
+
+  # Run tests
+  - name: node:20-alpine
+    id: test
+    entrypoint: sh
+    args:
+      - -c
+      - |
+        corepack enable && corepack prepare pnpm@9.0.0 --activate
+        pnpm --filter @fated/api test
+    waitFor: [install]
+
+  # Build Docker image
+  - name: gcr.io/cloud-builders/docker
+    id: build
+    args:
+      - build
+      - -t
+      - $_REGION-docker.pkg.dev/$PROJECT_ID/fatedworld/api:$COMMIT_SHA
+      - -t
+      - $_REGION-docker.pkg.dev/$PROJECT_ID/fatedworld/api:latest
+      - -f
+      - apps/api/Dockerfile
+      - .
+    waitFor: [test]
+
+  # Push to Artifact Registry
+  - name: gcr.io/cloud-builders/docker
+    id: push
+    args:
+      - push
+      - --all-tags
+      - $_REGION-docker.pkg.dev/$PROJECT_ID/fatedworld/api
+    waitFor: [build]
+
+  # Run migrations via Cloud Run Job
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: migrate
+    entrypoint: gcloud
+    args:
+      - run
+      - jobs
+      - execute
+      - fated-migrate-$_ENVIRONMENT
+      - --region=$_REGION
+      - --wait
+    waitFor: [push]
+
+  # Deploy to Cloud Run
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: deploy
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - fated-api-$_ENVIRONMENT
+      - --image=$_REGION-docker.pkg.dev/$PROJECT_ID/fatedworld/api:$COMMIT_SHA
+      - --region=$_REGION
+      - --no-traffic
+      - --tag=v-$COMMIT_SHA
+    waitFor: [migrate]
+
+  # Shift traffic
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: shift-traffic
+    entrypoint: gcloud
+    args:
+      - run
+      - services
+      - update-traffic
+      - fated-api-$_ENVIRONMENT
+      - --region=$_REGION
+      - --to-latest
+    waitFor: [deploy]
+
+substitutions:
+  _REGION: us-central1
+  _ENVIRONMENT: staging
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: E2_MEDIUM
+
+timeout: 1200s

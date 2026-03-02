@@ -1,0 +1,30 @@
+{
+  "name": "fatedworld",
+  "version": "0.0.1",
+  "private": true,
+  "packageManager": "pnpm@9.0.0",
+  "scripts": {
+    "dev:api": "pnpm --filter @fated/api dev",
+    "dev:admin": "pnpm --filter @fated/admin dev",
+    "build:api": "pnpm --filter @fated/api build",
+    "build:admin": "pnpm --filter @fated/admin build",
+    "build:types": "pnpm --filter @fated/types build",
+    "test": "pnpm -r test",
+    "test:api": "pnpm --filter @fated/api test",
+    "lint": "pnpm -r lint",
+    "db:migrate": "pnpm --filter @fated/api db:migrate",
+    "db:generate": "pnpm --filter @fated/api db:generate",
+    "db:studio": "pnpm --filter @fated/api db:studio"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "devDependencies": {
+    "typescript": "^5.4.5"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  }
+}

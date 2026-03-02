@@ -1,0 +1,45 @@
+{
+  "expo": {
+    "name": "FatedWorld",
+    "slug": "fatedworld",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "fatedworld",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#030712"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.fatedworld.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Used for profile photo selection.",
+        "NSPhotoLibraryUsageDescription": "Used for profile photo selection."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#030712"
+      },
+      "package": "com.fatedworld.app"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#7c3aed"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

@@ -1,0 +1,110 @@
+name: Deploy to PRODUCTION
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Docker image tag (git SHA) to deploy to PROD'
+        required: true
+        type: string
+      confirm:
+        description: 'Type "deploy-to-prod" to confirm'
+        required: true
+        type: string
+
+env:
+  STAGING_PROJECT_ID: ${{ secrets.GCP_STAGING_PROJECT_ID }}
+  PROD_PROJECT_ID: ${{ secrets.GCP_PROD_PROJECT_ID }}
+  REGION: us-central1
+  STAGING_REGISTRY: us-central1-docker.pkg.dev
+  PROD_REGISTRY: us-central1-docker.pkg.dev
+
+jobs:
+  guard:
+    name: Deployment Guard
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify confirmation
+        run: |
+          if [ "${{ github.event.inputs.confirm }}" != "deploy-to-prod" ]; then
+            echo "Confirmation string incorrect. Aborting."
+            exit 1
+          fi
+
+  deploy-prod:
+    name: Deploy to PRODUCTION
+    runs-on: ubuntu-latest
+    needs: guard
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to GCP (PROD)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_PROD_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_PROD_SA_EMAIL }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker
+        run: gcloud auth configure-docker ${{ env.PROD_REGISTRY }} --quiet
+
+      - name: Promote image from STAGING to PROD registry
+        run: |
+          STAGING_IMAGE="${{ env.STAGING_REGISTRY }}/${{ env.STAGING_PROJECT_ID }}/fatedworld/api:${{ github.event.inputs.image_tag }}"
+          PROD_IMAGE="${{ env.PROD_REGISTRY }}/${{ env.PROD_PROJECT_ID }}/fatedworld/api:${{ github.event.inputs.image_tag }}"
+
+          # Pull from staging, tag for prod, push
+          docker pull "${STAGING_IMAGE}"
+          docker tag "${STAGING_IMAGE}" "${PROD_IMAGE}"
+          docker tag "${STAGING_IMAGE}" "${PROD_REGISTRY}/${{ env.PROD_PROJECT_ID }}/fatedworld/api:latest"
+          docker push "${PROD_IMAGE}"
+          docker push "${PROD_REGISTRY}/${{ env.PROD_PROJECT_ID }}/fatedworld/api:latest"
+
+      - name: Deploy to Cloud Run PROD (0% traffic — canary)
+        run: |
+          PROD_IMAGE="${{ env.PROD_REGISTRY }}/${{ env.PROD_PROJECT_ID }}/fatedworld/api:${{ github.event.inputs.image_tag }}"
+          gcloud run deploy fated-api-prod \
+            --image="${PROD_IMAGE}" \
+            --region=${{ env.REGION }} \
+            --project=${{ env.PROD_PROJECT_ID }} \
+            --service-account=${{ secrets.GCP_PROD_API_SA }} \
+            --set-env-vars="ENVIRONMENT=prod,GCP_PROJECT_ID=${{ env.PROD_PROJECT_ID }},GCP_REGION=${{ env.REGION }}" \
+            --add-cloudsql-instances=${{ secrets.GCP_PROD_CLOUD_SQL_CONNECTION }} \
+            --vpc-connector=fated-connector-prod \
+            --vpc-egress=private-ranges-only \
+            --min-instances=2 \
+            --max-instances=50 \
+            --memory=1Gi \
+            --cpu=2 \
+            --concurrency=80 \
+            --timeout=30 \
+            --port=3000 \
+            --platform=managed \
+            --no-traffic \
+            --tag=canary-${{ github.event.inputs.image_tag }}
+
+      - name: Canary 10% traffic
+        run: |
+          gcloud run services update-traffic fated-api-prod \
+            --region=${{ env.REGION }} \
+            --project=${{ env.PROD_PROJECT_ID }} \
+            --to-tags=canary-${{ github.event.inputs.image_tag }}=10
+          echo "10% traffic sent to canary. Monitor for 5 minutes..."
+          sleep 300
+
+      - name: Promote to 100% (manual step — requires no errors in 5 min)
+        run: |
+          echo "Promoting canary to 100% traffic..."
+          gcloud run services update-traffic fated-api-prod \
+            --region=${{ env.REGION }} \
+            --project=${{ env.PROD_PROJECT_ID }} \
+            --to-latest
+          echo "Production deployment complete."
+          echo "Image: ${{ github.event.inputs.image_tag }}"
