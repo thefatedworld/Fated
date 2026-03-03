@@ -81,7 +81,8 @@ jobs:
           SQL="${{ secrets.GCP_STAGING_CLOUD_SQL_CONNECTION }}"
           DB_PASS=$(gcloud secrets versions access latest \
             --secret=db-password-staging --project="${PROJ}")
-          DB_URL="postgresql://fatedworld_api:${DB_PASS}@/fatedworld?host=/cloudsql/${SQL}&schema=public"
+          DB_PASS_ENC=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.stdin.read(), safe=''))" <<< "${DB_PASS}")
+          DB_URL="postgresql://fatedworld_api:${DB_PASS_ENC}@localhost/fatedworld?host=/cloudsql/${SQL}"
 
           if gcloud secrets describe database-url-staging --project="${PROJ}" &>/dev/null; then
             echo -n "${DB_URL}" | gcloud secrets versions add database-url-staging \
