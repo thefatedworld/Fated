@@ -197,9 +197,9 @@ export default function SeriesDetailPage() {
             {series?.description && (
               <p className="text-sm text-gray-400 mt-2 max-w-2xl">{series.description}</p>
             )}
-            {series?.genreTags?.length > 0 && (
+            {(series?.genreTags?.length ?? 0) > 0 && (
               <div className="flex gap-2 mt-2">
-                {series.genreTags.map((tag) => (
+                {series?.genreTags?.map((tag) => (
                   <span key={tag} className="px-2 py-0.5 rounded text-xs bg-purple-900/30 text-purple-300">{tag}</span>
                 ))}
               </div>
