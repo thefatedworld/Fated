@@ -15,9 +15,11 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.fatedworld.app",
+      "deploymentTarget": "16.4",
       "infoPlist": {
         "NSCameraUsageDescription": "Used for profile photo selection.",
-        "NSPhotoLibraryUsageDescription": "Used for profile photo selection."
+        "NSPhotoLibraryUsageDescription": "Used for profile photo selection.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
