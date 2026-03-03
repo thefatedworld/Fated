@@ -3,7 +3,6 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StatusBar } from 'expo-status-bar';
 import * as Notifications from 'expo-notifications';
-import Constants from 'expo-constants';
 import { initAuthClient } from '@/lib/auth';
 import { useAuthStore } from '@/store/auth.store';
 import '../global.css';
@@ -60,6 +59,7 @@ export default function RootLayout() {
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="series/[id]" options={{ headerShown: true, headerTitle: '', headerBackTitle: 'Back', headerStyle: { backgroundColor: '#111827' }, headerTintColor: '#ffffff' }} />
           <Stack.Screen name="episode/[id]" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
+          <Stack.Screen name="store" options={{ headerShown: false, presentation: 'modal' }} />
         </Stack>
         <StatusBar style="light" />
       </AuthGate>
