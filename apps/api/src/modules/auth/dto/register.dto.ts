@@ -15,17 +15,17 @@ export class RegisterDto {
   @Matches(/^[a-z0-9_]+$/, {
     message: 'Username must be lowercase alphanumeric with underscores only',
   })
-  username: string;
+  username!: string;
 
   @ApiProperty({ example: 'jane@example.com' })
   @IsEmail()
-  email: string;
+  email!: string;
 
   @ApiProperty({ minLength: 8 })
   @IsString()
   @MinLength(8)
   @MaxLength(100)
-  password: string;
+  password!: string;
 
   @ApiProperty({ example: 'Jane Doe', required: false })
   @IsString()

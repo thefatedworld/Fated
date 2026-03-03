@@ -36,11 +36,10 @@ export class ContentController {
   @ApiOperation({ summary: 'List published series' })
   @ApiQuery({ name: 'all', required: false, type: Boolean })
   listSeries(@Query('all') all?: string, @CurrentUser() user?: AuthenticatedUser) {
-    const isAdmin = user?.role && [
-      UserRole.content_admin,
-      UserRole.superadmin,
-    ].includes(user.role as UserRole);
-    return this.contentService.listSeries(all === 'true' && isAdmin);
+    const isAdmin = user?.role && (
+      user.role === UserRole.content_admin || user.role === UserRole.superadmin
+    );
+    return this.contentService.listSeries(all === 'true' && !!isAdmin);
   }
 
   @Public()
@@ -102,11 +101,10 @@ export class ContentController {
     @Query('all') all?: string,
     @CurrentUser() user?: AuthenticatedUser,
   ) {
-    const isAdmin = user?.role && [
-      UserRole.content_admin,
-      UserRole.superadmin,
-    ].includes(user.role as UserRole);
-    return this.contentService.listEpisodes(seriesId, all === 'true' && isAdmin);
+    const isAdmin = user?.role && (
+      user.role === UserRole.content_admin || user.role === UserRole.superadmin
+    );
+    return this.contentService.listEpisodes(seriesId, all === 'true' && !!isAdmin);
   }
 
   @Public()

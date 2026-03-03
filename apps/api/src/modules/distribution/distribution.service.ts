@@ -216,7 +216,7 @@ Return a JSON object with:
   }
 
   async listJobs(requestedBy: string, role: UserRole, episodeId?: string) {
-    const isAdmin = [UserRole.content_admin, UserRole.superadmin].includes(role);
+    const isAdmin = role === UserRole.content_admin || role === UserRole.superadmin;
 
     return this.prisma.distributionJob.findMany({
       where: {
@@ -239,7 +239,7 @@ Return a JSON object with:
 
     if (!job) throw new NotFoundException('Job not found');
 
-    const isAdmin = [UserRole.content_admin, UserRole.superadmin].includes(role);
+    const isAdmin = role === UserRole.content_admin || role === UserRole.superadmin;
     if (!isAdmin && job.requestedBy !== requestedBy) {
       throw new ForbiddenException('Not authorized to view this job');
     }

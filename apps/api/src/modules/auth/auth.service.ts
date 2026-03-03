@@ -17,7 +17,7 @@ import { AuditAction } from '@prisma/client';
 const BCRYPT_ROUNDS = 12;
 const REFRESH_TOKEN_BYTES = 48;
 
-interface TokenPair {
+export interface TokenPair {
   accessToken: string;
   refreshToken: string;
   expiresIn: number;

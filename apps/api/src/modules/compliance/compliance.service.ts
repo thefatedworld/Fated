@@ -69,7 +69,6 @@ export class ComplianceService {
         }),
         this.prisma.wikiRevision.findMany({
           where: { authorId: userId },
-          include: { page: { select: { title: true } } },
           select: { page: { select: { title: true } }, versionNum: true, status: true, createdAt: true },
           take: 200,
         }),

@@ -13,7 +13,7 @@ export class CreateEpisodeDto {
   @ApiProperty({ example: 'The Awakening' })
   @IsString()
   @MaxLength(200)
-  title: string;
+  title!: string;
 
   @ApiPropertyOptional()
   @IsString()

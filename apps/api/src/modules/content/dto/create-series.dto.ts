@@ -6,7 +6,7 @@ export class CreateSeriesDto {
   @IsString()
   @MinLength(1)
   @MaxLength(100)
-  title: string;
+  title!: string;
 
   @ApiProperty({ example: 'crimson-throne', description: 'URL slug (auto-generated if omitted)' })
   @IsString()

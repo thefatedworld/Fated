@@ -5,6 +5,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { TokensService } from '../tokens/tokens.service';
 import { AuditService } from '../../common/audit/audit.service';
@@ -113,7 +114,7 @@ export class IAPService {
         tokenAmount: product.tokenAmount,
         amountUsdCents: product.priceUsdCents,
         receiptData: receiptHash,
-        validationResponse: payload as Record<string, unknown>,
+        validationResponse: payload as Prisma.InputJsonValue,
         status: IAPTransactionStatus.validated,
         idempotencyKey,
       },
