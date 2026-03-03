@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, Image } from 'react-native';
+import { View, Text, TouchableOpacity, Image, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Series } from '@/lib/api-client';
 
@@ -14,27 +14,27 @@ export default function SeriesCard({ series, horizontal }: Props) {
     return (
       <TouchableOpacity
         onPress={() => router.push(`/series/${series.id}`)}
-        className="w-36"
         activeOpacity={0.8}
+        style={styles.horizontalCard}
       >
         {series.coverImageUrl ? (
           <Image
             source={{ uri: series.coverImageUrl }}
-            className="w-36 h-48 rounded-xl"
+            style={styles.horizontalImage}
             resizeMode="cover"
           />
         ) : (
-          <View className="w-36 h-48 rounded-xl bg-gray-800 items-center justify-center">
-            <Text className="text-gray-600 text-3xl font-bold">
+          <View style={[styles.horizontalImage, styles.placeholder]}>
+            <Text style={styles.placeholderText}>
               {series.title[0].toUpperCase()}
             </Text>
           </View>
         )}
-        <Text className="text-white text-xs font-semibold mt-2 px-0.5" numberOfLines={1}>
+        <Text style={styles.cardTitle} numberOfLines={1}>
           {series.title}
         </Text>
         {series.genreTags?.[0] && (
-          <Text className="text-gray-400 text-xs px-0.5" numberOfLines={1}>
+          <Text style={styles.cardGenre} numberOfLines={1}>
             {series.genreTags[0]}
           </Text>
         )}
@@ -45,30 +45,79 @@ export default function SeriesCard({ series, horizontal }: Props) {
   return (
     <TouchableOpacity
       onPress={() => router.push(`/series/${series.id}`)}
-      className="flex-1"
       activeOpacity={0.8}
+      style={styles.gridCard}
     >
       {series.coverImageUrl ? (
         <Image
           source={{ uri: series.coverImageUrl }}
-          className="w-full aspect-[2/3] rounded-xl"
+          style={styles.gridImage}
           resizeMode="cover"
         />
       ) : (
-        <View className="w-full aspect-[2/3] rounded-xl bg-gray-800 items-center justify-center">
-          <Text className="text-gray-600 text-4xl font-bold">
+        <View style={[styles.gridImage, styles.placeholder]}>
+          <Text style={styles.placeholderTextLarge}>
             {series.title[0].toUpperCase()}
           </Text>
         </View>
       )}
-      <Text className="text-white text-xs font-semibold mt-2 px-0.5" numberOfLines={2}>
+      <Text style={styles.cardTitle} numberOfLines={2}>
         {series.title}
       </Text>
       {series.genreTags?.[0] && (
-        <Text className="text-gray-400 text-xs px-0.5" numberOfLines={1}>
+        <Text style={styles.cardGenre} numberOfLines={1}>
           {series.genreTags[0]}
         </Text>
       )}
     </TouchableOpacity>
   );
 }
+
+const styles = StyleSheet.create({
+  horizontalCard: {
+    width: 140,
+  },
+  horizontalImage: {
+    width: 140,
+    height: 190,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  gridCard: {
+    flex: 1,
+  },
+  gridImage: {
+    width: '100%',
+    aspectRatio: 2 / 3,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  placeholder: {
+    backgroundColor: '#111827',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  placeholderText: {
+    color: '#374151',
+    fontSize: 28,
+    fontWeight: '700',
+  },
+  placeholderTextLarge: {
+    color: '#374151',
+    fontSize: 36,
+    fontWeight: '700',
+  },
+  cardTitle: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '600',
+    marginTop: 8,
+    paddingHorizontal: 2,
+  },
+  cardGenre: {
+    color: '#6b7280',
+    fontSize: 11,
+    marginTop: 2,
+    paddingHorizontal: 2,
+  },
+});

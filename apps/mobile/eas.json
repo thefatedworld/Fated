@@ -43,6 +43,7 @@
     "production": {
       "ios": {
         "appleId": "simonmuflier@gmail.com",
+        "ascAppId": "6759970899",
         "appleTeamId": "9BQD3D2TKN"
       },
       "android": {

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { adminApi } from '@/lib/api-client';
+import { getToken } from '@/lib/utils';
 
 interface PlatformSnapshot {
   date: string;
@@ -13,6 +14,13 @@ interface PlatformSnapshot {
   unlocks: number;
 }
 
+const STAT_CARDS = [
+  { key: 'views', label: 'Total Views', icon: '▶', color: 'purple' },
+  { key: 'users', label: 'New Users', icon: '◎', color: 'blue' },
+  { key: 'tokens', label: 'Tokens Sold', icon: '⬡', color: 'amber' },
+  { key: 'unlocks', label: 'Unlocks', icon: '↗', color: 'green' },
+] as const;
+
 export default function DashboardPage() {
   const router = useRouter();
   const [snapshots, setSnapshots] = useState<PlatformSnapshot[]>([]);
@@ -20,11 +28,8 @@ export default function DashboardPage() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const token = localStorage.getItem('fated_access_token');
-    if (!token) {
-      router.push('/login');
-      return;
-    }
+    const token = getToken();
+    if (!token) { router.push('/login'); return; }
 
     adminApi.getPlatformSnapshot(token, 7)
       .then((data) => setSnapshots(data as PlatformSnapshot[]))
@@ -38,88 +43,106 @@ export default function DashboardPage() {
       .finally(() => setLoading(false));
   }, [router]);
 
+  const totals = snapshots.reduce(
+    (acc, s) => ({
+      views: acc.views + s.totalViews,
+      users: acc.users + s.newUsers,
+      tokens: acc.tokens + Number(s.tokensSold || 0),
+      unlocks: acc.unlocks + s.unlocks,
+    }),
+    { views: 0, users: 0, tokens: 0, unlocks: 0 },
+  );
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-        <p className="text-gray-400">Loading...</p>
+      <div className="flex items-center justify-center py-32">
+        <div className="w-5 h-5 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
-      <nav className="bg-gray-900 border-b border-gray-800 px-6 py-4 flex items-center justify-between">
-        <h1 className="text-xl font-bold">FatedWorld Admin</h1>
-        <nav className="flex gap-6 text-sm text-gray-400">
-          <a href="/dashboard" className="text-white">Dashboard</a>
-          <a href="/dashboard/series" className="hover:text-white">Series</a>
-          <a href="/dashboard/moderation" className="hover:text-white">Moderation</a>
-          <a href="/dashboard/users" className="hover:text-white">Users</a>
-          <a href="/dashboard/audit" className="hover:text-white">Audit Log</a>
-        </nav>
-      </nav>
+    <div>
+      <div className="mb-8">
+        <h1 className="text-2xl font-bold text-white">Dashboard</h1>
+        <p className="text-gray-500 text-sm mt-1">Platform overview — last 7 days</p>
+      </div>
 
-      <main className="max-w-7xl mx-auto px-6 py-8">
-        <h2 className="text-2xl font-bold mb-6">Platform Overview (Last 7 Days)</h2>
+      {error && (
+        <div className="bg-red-950/30 border border-red-900/40 rounded-xl p-4 mb-6">
+          <p className="text-red-400 text-sm">{error}</p>
+        </div>
+      )}
 
-        {error && (
-          <div className="bg-red-900/20 border border-red-800 rounded-lg p-4 mb-6 text-red-400">
-            {error}
+      {/* Stat cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        {STAT_CARDS.map((card) => {
+          const value = totals[card.key];
+          const colorMap = {
+            purple: 'bg-purple-600/10 text-purple-400 border-purple-500/10',
+            blue: 'bg-blue-600/10 text-blue-400 border-blue-500/10',
+            amber: 'bg-amber-600/10 text-amber-400 border-amber-500/10',
+            green: 'bg-green-600/10 text-green-400 border-green-500/10',
+          };
+          return (
+            <div key={card.key} className={`rounded-xl p-5 border ${colorMap[card.color]}`}>
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-medium uppercase tracking-wider opacity-70">{card.label}</span>
+                <span className="text-lg">{card.icon}</span>
+              </div>
+              <p className="text-2xl font-bold">{value.toLocaleString()}</p>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Quick actions + status */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="bg-gray-900/50 border border-gray-800/60 rounded-xl p-5">
+          <h3 className="text-sm font-semibold text-white mb-4">Quick Actions</h3>
+          <div className="space-y-2">
+            <a
+              href="/dashboard/series/new"
+              className="flex items-center gap-3 w-full px-4 py-3 bg-purple-600 hover:bg-purple-500 rounded-lg text-sm font-medium text-white transition-colors"
+            >
+              <span>+</span>
+              Create New Series
+            </a>
+            <a
+              href="/dashboard/moderation"
+              className="flex items-center gap-3 w-full px-4 py-3 bg-gray-800/70 hover:bg-gray-800 rounded-lg text-sm font-medium text-gray-300 transition-colors"
+            >
+              <span>⛨</span>
+              Moderation Queue
+            </a>
           </div>
-        )}
+        </div>
 
-        {snapshots.length === 0 ? (
-          <div className="bg-gray-900 rounded-xl p-8 text-center text-gray-500">
-            <p>No analytics data yet. Data appears after the first day of activity.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <div className="bg-gray-900/50 border border-gray-800/60 rounded-xl p-5">
+          <h3 className="text-sm font-semibold text-white mb-4">System Status</h3>
+          <div className="space-y-3">
             {[
-              { label: 'Total Views', value: snapshots.reduce((a, s) => a + s.totalViews, 0).toLocaleString() },
-              { label: 'New Users', value: snapshots.reduce((a, s) => a + s.newUsers, 0).toLocaleString() },
-              { label: 'Tokens Sold', value: snapshots.reduce((a, s) => a + BigInt(s.tokensSold), BigInt(0)).toString() },
-              { label: 'Unlocks', value: snapshots.reduce((a, s) => a + s.unlocks, 0).toLocaleString() },
-            ].map((stat) => (
-              <div key={stat.label} className="bg-gray-900 rounded-xl p-6 border border-gray-800">
-                <p className="text-gray-400 text-sm">{stat.label}</p>
-                <p className="text-2xl font-bold mt-1">{stat.value}</p>
+              { label: 'API', status: 'Operational', ok: true },
+              { label: 'Database', status: 'Connected', ok: true },
+              { label: 'Environment', status: process.env.NEXT_PUBLIC_ENVIRONMENT ?? 'staging', ok: null },
+            ].map((row) => (
+              <div key={row.label} className="flex items-center justify-between text-sm">
+                <span className="text-gray-400">{row.label}</span>
+                <span className={row.ok === true ? 'text-green-400' : row.ok === false ? 'text-red-400' : 'text-yellow-400'}>
+                  {row.status}
+                </span>
               </div>
             ))}
           </div>
-        )}
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="bg-gray-900 rounded-xl p-6 border border-gray-800">
-            <h3 className="font-semibold mb-4">Quick Actions</h3>
-            <div className="space-y-2">
-              <a href="/dashboard/series/new" className="block w-full text-center py-2 px-4 bg-purple-600 hover:bg-purple-700 rounded-lg text-sm font-medium transition-colors">
-                + Create New Series
-              </a>
-              <a href="/dashboard/moderation" className="block w-full text-center py-2 px-4 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm font-medium transition-colors">
-                View Moderation Queue
-              </a>
-            </div>
-          </div>
-
-          <div className="bg-gray-900 rounded-xl p-6 border border-gray-800">
-            <h3 className="font-semibold mb-4">System Status</h3>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-gray-400">API</span>
-                <span className="text-green-400">Operational</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-400">Database</span>
-                <span className="text-green-400">Connected</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-400">Environment</span>
-                <span className="text-yellow-400">{process.env.NEXT_PUBLIC_ENVIRONMENT ?? 'staging'}</span>
-              </div>
-            </div>
-          </div>
         </div>
-      </main>
+      </div>
+
+      {/* Empty state */}
+      {snapshots.length === 0 && !error && (
+        <div className="mt-8 bg-gray-900/30 border border-gray-800/40 rounded-xl p-8 text-center">
+          <p className="text-gray-500 text-sm">No analytics data yet. Data appears after the first day of activity.</p>
+        </div>
+      )}
     </div>
   );
 }

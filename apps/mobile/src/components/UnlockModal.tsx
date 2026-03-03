@@ -1,5 +1,6 @@
 import { View, Text, TouchableOpacity, Modal, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { Episode } from '@/lib/api-client';
 import { useUiStore } from '@/store/ui.store';
 
@@ -13,6 +14,7 @@ interface Props {
 }
 
 export default function UnlockModal({ visible, episode, onClose, onConfirm, isLoading, error }: Props) {
+  const router = useRouter();
   const tokenBalance = useUiStore((s) => s.tokenBalance);
   const hasEnoughTokens = tokenBalance !== null && tokenBalance >= episode.tokenCost;
 
@@ -58,11 +60,19 @@ export default function UnlockModal({ visible, episode, onClose, onConfirm, isLo
             </View>
           )}
 
-          {/* Not enough tokens hint */}
+          {/* Not enough tokens — link to store */}
           {!hasEnoughTokens && tokenBalance !== null && (
-            <Text className="text-yellow-400 text-xs text-center mt-3">
-              You need {episode.tokenCost - tokenBalance} more tokens. Buy more in-app.
-            </Text>
+            <TouchableOpacity
+              onPress={() => { onClose(); router.push('/store'); }}
+              className="mt-3 items-center"
+            >
+              <Text className="text-yellow-400 text-xs text-center">
+                You need {episode.tokenCost - tokenBalance} more tokens.
+              </Text>
+              <Text className="text-purple-400 text-sm font-semibold mt-1">
+                Buy Tokens
+              </Text>
+            </TouchableOpacity>
           )}
 
           {/* Actions */}

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { adminApi, AuditLogEntry } from '@/lib/api-client';
+import { getToken } from '@/lib/utils';
 
 export default function AuditLogPage() {
   const router = useRouter();
@@ -11,10 +12,6 @@ export default function AuditLogPage() {
   const [cursor, setCursor] = useState<string | undefined>();
   const [hasMore, setHasMore] = useState(false);
   const [filters, setFilters] = useState({ action: '', actorId: '', targetType: '' });
-
-  function getToken() {
-    return localStorage.getItem('fated_access_token') ?? '';
-  }
 
   async function load(append = false) {
     const token = getToken();
@@ -57,114 +54,106 @@ export default function AuditLogPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
-      <nav className="bg-gray-900 border-b border-gray-800 px-6 py-4 flex items-center justify-between">
-        <h1 className="text-xl font-bold">FatedWorld Admin</h1>
-        <div className="flex gap-6 text-sm text-gray-400">
-          <a href="/dashboard" className="hover:text-white">Dashboard</a>
-          <a href="/dashboard/series" className="hover:text-white">Series</a>
-          <a href="/dashboard/users" className="hover:text-white">Users</a>
-          <a href="/dashboard/moderation" className="hover:text-white">Moderation</a>
-          <a href="/dashboard/audit" className="text-white">Audit Log</a>
+    <div>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-white">Audit Log</h1>
+        <p className="text-gray-500 text-sm mt-1">Track all administrative actions</p>
+      </div>
+
+      {/* Filters */}
+      <div className="flex gap-3 mb-6">
+        <input
+          value={filters.action}
+          onChange={(e) => setFilters({ ...filters, action: e.target.value })}
+          placeholder="Filter by action"
+          className="flex-1 bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+        />
+        <input
+          value={filters.actorId}
+          onChange={(e) => setFilters({ ...filters, actorId: e.target.value })}
+          placeholder="Actor ID"
+          className="flex-1 bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+        />
+        <select
+          value={filters.targetType}
+          onChange={(e) => setFilters({ ...filters, targetType: e.target.value })}
+          className="bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+        >
+          <option value="">All targets</option>
+          <option value="user">User</option>
+          <option value="episode">Episode</option>
+          <option value="series">Series</option>
+          <option value="token">Token</option>
+          <option value="wiki">Wiki</option>
+        </select>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <div className="w-5 h-5 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
         </div>
-      </nav>
-
-      <main className="max-w-7xl mx-auto px-6 py-8">
-        <h2 className="text-2xl font-bold mb-6">Audit Log</h2>
-
-        {/* Filters */}
-        <div className="flex gap-4 mb-6">
-          <input
-            value={filters.action}
-            onChange={(e) => setFilters({ ...filters, action: e.target.value })}
-            placeholder="Filter by action (e.g. token.credit)"
-            className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
-          />
-          <input
-            value={filters.actorId}
-            onChange={(e) => setFilters({ ...filters, actorId: e.target.value })}
-            placeholder="Actor ID (UUID)"
-            className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
-          />
-          <select
-            value={filters.targetType}
-            onChange={(e) => setFilters({ ...filters, targetType: e.target.value })}
-            className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500"
-          >
-            <option value="">All target types</option>
-            <option value="user">User</option>
-            <option value="episode">Episode</option>
-            <option value="series">Series</option>
-            <option value="token">Token</option>
-            <option value="wiki">Wiki</option>
-          </select>
-        </div>
-
-        {loading ? (
-          <p className="text-gray-400">Loading...</p>
-        ) : (
-          <div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
-            {entries.length === 0 ? (
-              <div className="p-12 text-center text-gray-500">No audit log entries found.</div>
-            ) : (
-              <>
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-gray-800 text-left">
-                      <th className="px-6 py-3 text-xs text-gray-400 uppercase">Time</th>
-                      <th className="px-6 py-3 text-xs text-gray-400 uppercase">Action</th>
-                      <th className="px-6 py-3 text-xs text-gray-400 uppercase">Actor</th>
-                      <th className="px-6 py-3 text-xs text-gray-400 uppercase">Target</th>
-                      <th className="px-6 py-3 text-xs text-gray-400 uppercase">IP</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-800">
-                    {entries.map((entry) => (
-                      <tr key={entry.id} className="hover:bg-gray-800/50">
-                        <td className="px-6 py-3 text-xs text-gray-400 whitespace-nowrap">
-                          {new Date(entry.createdAt).toLocaleString()}
-                        </td>
-                        <td className="px-6 py-3">
-                          <span className={`text-xs font-mono ${actionBadgeColor(entry.action)}`}>
-                            {entry.action}
+      ) : (
+        <div className="bg-gray-900/50 border border-gray-800/60 rounded-xl overflow-hidden">
+          {entries.length === 0 ? (
+            <div className="p-12 text-center text-gray-500">No audit log entries found.</div>
+          ) : (
+            <>
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-800/60 text-left">
+                    <th className="px-5 py-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Time</th>
+                    <th className="px-5 py-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Action</th>
+                    <th className="px-5 py-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Actor</th>
+                    <th className="px-5 py-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Target</th>
+                    <th className="px-5 py-3 text-xs text-gray-500 uppercase tracking-wider font-medium">IP</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-800/60">
+                  {entries.map((entry) => (
+                    <tr key={entry.id} className="hover:bg-gray-800/30 transition-colors">
+                      <td className="px-5 py-3 text-xs text-gray-400 whitespace-nowrap">
+                        {new Date(entry.createdAt).toLocaleString()}
+                      </td>
+                      <td className="px-5 py-3">
+                        <span className={`text-xs font-mono ${actionBadgeColor(entry.action)}`}>
+                          {entry.action}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3 text-xs text-gray-400">
+                        <span className="font-mono">{entry.actorId?.slice(0, 8)}...</span>
+                        {entry.actorRole && (
+                          <span className="ml-1 text-gray-500">({entry.actorRole})</span>
+                        )}
+                      </td>
+                      <td className="px-5 py-3 text-xs text-gray-400">
+                        {entry.targetType && (
+                          <span className="font-mono">
+                            {entry.targetType}:{entry.targetId?.slice(0, 8)}...
                           </span>
-                        </td>
-                        <td className="px-6 py-3 text-xs text-gray-400">
-                          <span className="font-mono">{entry.actorId?.slice(0, 8)}…</span>
-                          {entry.actorRole && (
-                            <span className="ml-1 text-gray-500">({entry.actorRole})</span>
-                          )}
-                        </td>
-                        <td className="px-6 py-3 text-xs text-gray-400">
-                          {entry.targetType && (
-                            <span className="font-mono">
-                              {entry.targetType}:{entry.targetId?.slice(0, 8)}…
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-6 py-3 text-xs text-gray-500">
-                          {entry.ipAddress ?? '—'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                        )}
+                      </td>
+                      <td className="px-5 py-3 text-xs text-gray-500">
+                        {entry.ipAddress ?? '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
 
-                {hasMore && (
-                  <div className="px-6 py-4 border-t border-gray-800">
-                    <button
-                      onClick={() => load(true)}
-                      className="text-sm text-purple-400 hover:text-purple-300 transition-colors"
-                    >
-                      Load more
-                    </button>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        )}
-      </main>
+              {hasMore && (
+                <div className="px-5 py-4 border-t border-gray-800/60">
+                  <button
+                    onClick={() => load(true)}
+                    className="text-sm text-purple-400 hover:text-purple-300 transition-colors"
+                  >
+                    Load more
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

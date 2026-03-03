@@ -2,17 +2,13 @@ import {
   View,
   Text,
   FlatList,
-  ActivityIndicator,
   RefreshControl,
   TouchableOpacity,
+  StyleSheet,
 } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api-client';
 import { useRouter } from 'expo-router';
-
-// The library shows the user's unlocked episodes, grouped by series.
-// We fetch entitlements through the /v1/entitlements/my endpoint.
-// For MVP, we list series the user has any unlock for.
 
 export default function LibraryScreen() {
   const router = useRouter();
@@ -20,9 +16,6 @@ export default function LibraryScreen() {
   const { data, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['my-entitlements'],
     queryFn: async () => {
-      // Fetch all published series; filter those the user has unlocked at least one episode of.
-      // In a real implementation, this would call GET /v1/entitlements/my which returns all grants.
-      // For now we fetch series + do client-side filtering via a dedicated endpoint.
       const series = await api.listSeries();
       return series;
     },
@@ -30,35 +23,34 @@ export default function LibraryScreen() {
 
   if (isLoading) {
     return (
-      <View className="flex-1 bg-gray-950 items-center justify-center">
-        <ActivityIndicator color="#a855f7" size="large" />
+      <View style={[styles.container, styles.center]}>
+        <View style={styles.spinner} />
       </View>
     );
   }
 
   return (
     <FlatList
-      className="flex-1 bg-gray-950"
-      contentContainerStyle={{ paddingBottom: 32, paddingHorizontal: 16 }}
+      style={styles.container}
+      contentContainerStyle={styles.listContent}
       refreshControl={
         <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#a855f7" />
       }
       ListHeaderComponent={
-        <View className="pt-6 pb-4">
-          <Text className="text-2xl font-bold text-white">My Library</Text>
-          <Text className="text-gray-400 text-sm mt-1">Your unlocked episodes</Text>
+        <View style={styles.header}>
+          <Text style={styles.title}>My Library</Text>
+          <Text style={styles.subtitle}>Your unlocked episodes</Text>
         </View>
       }
       ListEmptyComponent={
-        <View className="items-center justify-center py-20">
-          <Text className="text-gray-400 text-center mb-4">
-            No unlocked episodes yet.
-          </Text>
+        <View style={[styles.center, { paddingVertical: 80 }]}>
+          <Text style={styles.emptyText}>No unlocked episodes yet.</Text>
           <TouchableOpacity
             onPress={() => router.replace('/(tabs)')}
-            className="bg-purple-600 rounded-xl px-6 py-3"
+            style={styles.browseButton}
+            activeOpacity={0.85}
           >
-            <Text className="text-white font-semibold">Browse Series</Text>
+            <Text style={styles.browseButtonText}>Browse Series</Text>
           </TouchableOpacity>
         </View>
       }
@@ -67,18 +59,102 @@ export default function LibraryScreen() {
       renderItem={({ item }) => (
         <TouchableOpacity
           onPress={() => router.push(`/series/${item.id}`)}
-          className="bg-gray-900 rounded-xl border border-gray-800 px-4 py-4 mb-3 flex-row items-center gap-4"
+          style={styles.listItem}
           activeOpacity={0.8}
         >
-          <View className="flex-1">
-            <Text className="text-white font-semibold text-base">{item.title}</Text>
-            <Text className="text-gray-400 text-xs mt-0.5">
+          <View style={styles.listItemContent}>
+            <Text style={styles.listItemTitle}>{item.title}</Text>
+            <Text style={styles.listItemSub}>
               {item.genreTags?.slice(0, 2).join(', ')}
             </Text>
           </View>
-          <Text className="text-gray-500 text-xs">›</Text>
+          <Text style={styles.chevron}>›</Text>
         </TouchableOpacity>
       )}
     />
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#030712',
+  },
+  center: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  listContent: {
+    paddingBottom: 32,
+    paddingHorizontal: 16,
+  },
+  header: {
+    paddingTop: 20,
+    paddingBottom: 16,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#ffffff',
+    letterSpacing: -0.5,
+  },
+  subtitle: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginTop: 4,
+  },
+  emptyText: {
+    color: '#6b7280',
+    textAlign: 'center',
+    marginBottom: 16,
+    fontSize: 14,
+  },
+  browseButton: {
+    backgroundColor: '#7c3aed',
+    borderRadius: 12,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+  },
+  browseButtonText: {
+    color: '#ffffff',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  listItem: {
+    backgroundColor: '#0f172a',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#1e293b',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    marginBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  listItemContent: {
+    flex: 1,
+  },
+  listItemTitle: {
+    color: '#ffffff',
+    fontWeight: '600',
+    fontSize: 15,
+  },
+  listItemSub: {
+    color: '#6b7280',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  chevron: {
+    color: '#374151',
+    fontSize: 18,
+  },
+  spinner: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#7c3aed',
+    borderTopColor: 'transparent',
+  },
+});

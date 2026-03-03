@@ -15,14 +15,10 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     setError('');
-
     try {
       const { accessToken, refreshToken } = await adminApi.login(email, password);
-
-      // Store tokens (httpOnly cookies would be better — implement in API route)
       localStorage.setItem('fated_access_token', accessToken);
       localStorage.setItem('fated_refresh_token', refreshToken);
-
       router.push('/dashboard');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');
@@ -33,45 +29,57 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-950 px-4">
-      <div className="w-full max-w-md">
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-600/5 rounded-full blur-3xl" />
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-600/5 rounded-full blur-3xl" />
+      </div>
+
+      <div className="w-full max-w-sm relative">
+        {/* Brand */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-white">FatedWorld</h1>
-          <p className="text-gray-400 mt-2">Admin Panel — Internal Use Only</p>
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-purple-600/15 border border-purple-500/20 mb-5">
+            <span className="text-purple-400 font-bold text-2xl italic">F</span>
+          </div>
+          <h1 className="text-2xl font-bold text-white tracking-tight">Fated Admin</h1>
+          <p className="text-gray-500 mt-1.5 text-sm">Internal panel — sign in to continue</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="bg-gray-900 rounded-xl p-8 space-y-6 border border-gray-800">
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="space-y-5">
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Email</label>
+            <label className="block text-xs font-medium text-gray-400 mb-1.5 ml-0.5">Email</label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
+              className="w-full px-3.5 py-2.5 bg-gray-900 border border-gray-800 rounded-xl text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500/40 focus:border-purple-500/40 transition-shadow"
               placeholder="admin@fatedworld.com"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Password</label>
+            <label className="block text-xs font-medium text-gray-400 mb-1.5 ml-0.5">Password</label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
-              placeholder="••••••••"
+              className="w-full px-3.5 py-2.5 bg-gray-900 border border-gray-800 rounded-xl text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500/40 focus:border-purple-500/40 transition-shadow"
+              placeholder="Password"
             />
           </div>
 
           {error && (
-            <p className="text-red-400 text-sm">{error}</p>
+            <div className="bg-red-950/30 border border-red-900/40 rounded-xl px-4 py-2.5">
+              <p className="text-red-400 text-sm">{error}</p>
+            </div>
           )}
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2 px-4 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white font-medium rounded-lg transition-colors"
+            className="w-full py-2.5 px-4 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-colors"
           >
             {loading ? 'Signing in...' : 'Sign In'}
           </button>

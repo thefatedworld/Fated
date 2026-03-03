@@ -1,7 +1,7 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useUiStore } from '@/store/ui.store';
-import { View, Text } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { useEffect } from 'react';
 
 export default function TabsLayout() {
@@ -14,15 +14,20 @@ export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
-        headerStyle: { backgroundColor: '#111827' },
+        headerStyle: { backgroundColor: '#030712' },
         headerTintColor: '#ffffff',
-        headerTitleStyle: { fontWeight: '600' },
+        headerTitleStyle: { fontWeight: '600', fontSize: 17 },
+        headerShadowVisible: false,
         tabBarStyle: {
-          backgroundColor: '#111827',
-          borderTopColor: '#1f2937',
+          backgroundColor: '#030712',
+          borderTopColor: '#1f293720',
+          borderTopWidth: StyleSheet.hairlineWidth,
+          height: 85,
+          paddingTop: 6,
         },
         tabBarActiveTintColor: '#a855f7',
-        tabBarInactiveTintColor: '#6b7280',
+        tabBarInactiveTintColor: '#4b5563',
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '500' },
       }}
     >
       <Tabs.Screen
@@ -61,8 +66,25 @@ function TokenBalancePill() {
   const balance = useUiStore((s) => s.tokenBalance);
   if (balance === null) return null;
   return (
-    <View className="flex-row items-center bg-purple-900/40 rounded-full px-3 py-1 mr-4">
-      <Text className="text-purple-300 text-xs font-semibold">{balance} tokens</Text>
+    <View style={pillStyles.container}>
+      <Text style={pillStyles.text}>{balance} tokens</Text>
     </View>
   );
 }
+
+const pillStyles = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(124,58,237,0.15)',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    marginRight: 16,
+  },
+  text: {
+    color: '#a855f7',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+});

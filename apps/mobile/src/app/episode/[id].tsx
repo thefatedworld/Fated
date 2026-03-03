@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, SafeAreaView } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator, SafeAreaView, StyleSheet } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, EntitlementCheck } from '@/lib/api-client';
@@ -43,7 +43,6 @@ export default function EpisodeScreen() {
     },
   });
 
-  // Fetch playback URL once entitled
   useEffect(() => {
     if (!entitlement?.entitled || playbackRequested.current) return;
     playbackRequested.current = true;
@@ -51,9 +50,7 @@ export default function EpisodeScreen() {
     api.getPlaybackUrl(id).then(({ playbackUrl: url }) => {
       setPlaybackUrl(url);
       if (episode) analytics.playbackStart(id, episode.seriesId);
-    }).catch(() => {
-      // Will show error UI
-    });
+    }).catch(() => {});
   }, [entitlement?.entitled, id, episode]);
 
   const handlePlaybackProgress = useCallback(
@@ -72,7 +69,7 @@ export default function EpisodeScreen() {
 
   if (epLoading || entitlementLoading) {
     return (
-      <View className="flex-1 bg-black items-center justify-center">
+      <View style={[styles.container, styles.center]}>
         <ActivityIndicator color="#a855f7" size="large" />
       </View>
     );
@@ -80,8 +77,8 @@ export default function EpisodeScreen() {
 
   if (!episode) {
     return (
-      <View className="flex-1 bg-black items-center justify-center px-6">
-        <Text className="text-white text-center">Episode not found.</Text>
+      <View style={[styles.container, styles.center]}>
+        <Text style={styles.notFoundText}>Episode not found.</Text>
       </View>
     );
   }
@@ -89,17 +86,14 @@ export default function EpisodeScreen() {
   const isEntitled = entitlement?.entitled ?? false;
 
   return (
-    <SafeAreaView className="flex-1 bg-black">
+    <SafeAreaView style={styles.container}>
       {/* Close button */}
-      <TouchableOpacity
-        onPress={() => router.back()}
-        className="absolute top-12 left-4 z-10 w-10 h-10 rounded-full bg-black/60 items-center justify-center"
-      >
+      <TouchableOpacity onPress={() => router.back()} style={styles.closeButton}>
         <Ionicons name="close" size={20} color="#ffffff" />
       </TouchableOpacity>
 
       {/* Video area */}
-      <View className="w-full aspect-video bg-gray-950">
+      <View style={styles.videoArea}>
         {isEntitled && playbackUrl ? (
           <VideoPlayer
             uri={playbackUrl}
@@ -107,31 +101,30 @@ export default function EpisodeScreen() {
             onEnd={handlePlaybackEnd}
           />
         ) : isEntitled && !playbackUrl ? (
-          <View className="flex-1 items-center justify-center">
+          <View style={[styles.videoArea, styles.center]}>
             <ActivityIndicator color="#a855f7" />
           </View>
         ) : (
-          /* Locked state */
-          <View className="flex-1 items-center justify-center px-8">
+          <View style={[styles.videoArea, styles.center, { paddingHorizontal: 32 }]}>
             <Ionicons name="lock-closed" size={40} color="#7c3aed" />
-            <Text className="text-white font-bold text-lg mt-4 text-center">{episode.title}</Text>
+            <Text style={styles.lockedTitle}>{episode.title}</Text>
             {episode.isGated && (
-              <Text className="text-gray-400 text-sm mt-2 text-center">
+              <Text style={styles.lockedCost}>
                 Unlock for {episode.tokenCost} tokens
               </Text>
             )}
             {episode.isGated ? (
               <TouchableOpacity
                 onPress={() => setShowUnlockModal(true)}
-                className="bg-purple-600 rounded-xl px-8 py-4 mt-6"
+                style={styles.unlockButton}
                 activeOpacity={0.85}
               >
-                <Text className="text-white font-semibold text-base">
+                <Text style={styles.unlockButtonText}>
                   Unlock — {episode.tokenCost} Tokens
                 </Text>
               </TouchableOpacity>
             ) : (
-              <Text className="text-gray-400 text-sm mt-4 text-center">
+              <Text style={styles.lockedCost}>
                 This episode is not yet available.
               </Text>
             )}
@@ -140,19 +133,18 @@ export default function EpisodeScreen() {
       </View>
 
       {/* Episode info */}
-      <View className="px-4 pt-4">
-        <Text className="text-white font-bold text-lg">{episode.title}</Text>
+      <View style={styles.episodeInfo}>
+        <Text style={styles.episodeTitle}>{episode.title}</Text>
         {episode.description && (
-          <Text className="text-gray-400 text-sm mt-1 leading-5">{episode.description}</Text>
+          <Text style={styles.episodeDescription}>{episode.description}</Text>
         )}
         {episode.durationSeconds && (
-          <Text className="text-gray-500 text-xs mt-2">
+          <Text style={styles.episodeDuration}>
             {Math.floor(episode.durationSeconds / 60)}m {episode.durationSeconds % 60}s
           </Text>
         )}
       </View>
 
-      {/* Unlock modal */}
       <UnlockModal
         visible={showUnlockModal}
         episode={episode}
@@ -164,3 +156,81 @@ export default function EpisodeScreen() {
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#000000',
+  },
+  center: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 56,
+    left: 16,
+    zIndex: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  videoArea: {
+    width: '100%',
+    aspectRatio: 16 / 9,
+    backgroundColor: '#030712',
+  },
+  lockedTitle: {
+    color: '#ffffff',
+    fontWeight: '700',
+    fontSize: 18,
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  lockedCost: {
+    color: '#6b7280',
+    fontSize: 14,
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  unlockButton: {
+    backgroundColor: '#7c3aed',
+    borderRadius: 14,
+    paddingHorizontal: 32,
+    paddingVertical: 16,
+    marginTop: 24,
+  },
+  unlockButtonText: {
+    color: '#ffffff',
+    fontWeight: '600',
+    fontSize: 15,
+  },
+  episodeInfo: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+  },
+  episodeTitle: {
+    color: '#ffffff',
+    fontWeight: '700',
+    fontSize: 18,
+  },
+  episodeDescription: {
+    color: '#6b7280',
+    fontSize: 14,
+    marginTop: 4,
+    lineHeight: 20,
+  },
+  episodeDuration: {
+    color: '#4b5563',
+    fontSize: 12,
+    marginTop: 8,
+  },
+  notFoundText: {
+    color: '#ffffff',
+    textAlign: 'center',
+    fontSize: 14,
+  },
+});

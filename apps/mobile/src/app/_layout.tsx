@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StatusBar } from 'expo-status-bar';
@@ -7,7 +8,6 @@ import { initAuthClient } from '@/lib/auth';
 import { useAuthStore } from '@/store/auth.store';
 import '../global.css';
 
-// Initialize auth token getter on module load
 initAuthClient();
 
 const queryClient = new QueryClient({
@@ -19,7 +19,6 @@ const queryClient = new QueryClient({
   },
 });
 
-// Configure foreground notification handler
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
@@ -41,14 +40,31 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     if (isLoading) return;
     const inAuthGroup = segments[0] === '(auth)';
     if (!isAuthenticated && !inAuthGroup) {
-      router.replace('/(auth)/login');
+      router.replace('/(auth)');
     } else if (isAuthenticated && inAuthGroup) {
       router.replace('/(tabs)');
     }
   }, [isAuthenticated, isLoading, segments, router]);
 
+  if (isLoading) {
+    return (
+      <View style={splashStyles.container}>
+        <ActivityIndicator size="large" color="#7c3aed" />
+      </View>
+    );
+  }
+
   return <>{children}</>;
 }
+
+const splashStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#030712',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});
 
 export default function RootLayout() {
   return (
@@ -57,7 +73,16 @@ export default function RootLayout() {
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="(auth)" />
           <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="series/[id]" options={{ headerShown: true, headerTitle: '', headerBackTitle: 'Back', headerStyle: { backgroundColor: '#111827' }, headerTintColor: '#ffffff' }} />
+          <Stack.Screen
+            name="series/[id]"
+            options={{
+              headerShown: true,
+              headerTitle: '',
+              headerBackTitle: 'Back',
+              headerStyle: { backgroundColor: '#030712' },
+              headerTintColor: '#ffffff',
+            }}
+          />
           <Stack.Screen name="episode/[id]" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
           <Stack.Screen name="store" options={{ headerShown: false, presentation: 'modal' }} />
         </Stack>
@@ -68,5 +93,5 @@ export default function RootLayout() {
 }
 
 export const unstable_settings = {
-  initialRouteName: '(tabs)',
+  initialRouteName: '(auth)',
 };

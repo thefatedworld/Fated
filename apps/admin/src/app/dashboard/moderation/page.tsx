@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { adminApi } from '@/lib/api-client';
+import { getToken } from '@/lib/utils';
 
 interface QueueItem {
   id: string;
@@ -22,7 +23,7 @@ export default function ModerationPage() {
   const [activeTab, setActiveTab] = useState<'reports' | 'wiki'>('reports');
 
   useEffect(() => {
-    const token = localStorage.getItem('fated_access_token');
+    const token = getToken();
     if (!token) { router.push('/login'); return; }
 
     Promise.all([
@@ -38,98 +39,90 @@ export default function ModerationPage() {
   }, [router]);
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
-      <nav className="bg-gray-900 border-b border-gray-800 px-6 py-4 flex items-center justify-between">
-        <h1 className="text-xl font-bold">FatedWorld Admin</h1>
-        <div className="flex gap-6 text-sm text-gray-400">
-          <a href="/dashboard" className="hover:text-white">Dashboard</a>
-          <a href="/dashboard/series" className="hover:text-white">Series</a>
-          <a href="/dashboard/moderation" className="text-white">Moderation</a>
-        </div>
-      </nav>
+    <div>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-white">Moderation</h1>
+        <p className="text-gray-500 text-sm mt-1">Review reports and wiki submissions</p>
+      </div>
 
-      <main className="max-w-7xl mx-auto px-6 py-8">
-        <h2 className="text-2xl font-bold mb-6">Moderation Queue</h2>
-
-        <div className="flex gap-2 mb-6">
+      {/* Tabs */}
+      <div className="flex gap-2 mb-6">
+        {(['reports', 'wiki'] as const).map((tab) => (
           <button
-            onClick={() => setActiveTab('reports')}
+            key={tab}
+            onClick={() => setActiveTab(tab)}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              activeTab === 'reports' ? 'bg-purple-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
+              activeTab === tab
+                ? 'bg-purple-600/15 text-purple-400'
+                : 'bg-gray-800/50 text-gray-400 hover:text-gray-200'
             }`}
           >
-            Abuse Reports ({reports.length})
+            {tab === 'reports' ? `Abuse Reports (${reports.length})` : `Wiki Reviews (${wikiQueue.length})`}
           </button>
-          <button
-            onClick={() => setActiveTab('wiki')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              activeTab === 'wiki' ? 'bg-purple-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
-            }`}
-          >
-            Wiki Reviews ({wikiQueue.length})
-          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <div className="w-5 h-5 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
         </div>
-
-        {loading ? (
-          <p className="text-gray-400">Loading...</p>
-        ) : (
-          <div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
-            {activeTab === 'reports' && (
-              reports.length === 0 ? (
-                <div className="p-12 text-center text-gray-500">No open reports.</div>
-              ) : (
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-gray-800 text-left">
-                      <th className="px-6 py-3 text-xs text-gray-400 uppercase">Reporter</th>
-                      <th className="px-6 py-3 text-xs text-gray-400 uppercase">Category</th>
-                      <th className="px-6 py-3 text-xs text-gray-400 uppercase">Status</th>
-                      <th className="px-6 py-3 text-xs text-gray-400 uppercase">Date</th>
+      ) : (
+        <div className="bg-gray-900/50 border border-gray-800/60 rounded-xl overflow-hidden">
+          {activeTab === 'reports' && (
+            reports.length === 0 ? (
+              <div className="p-12 text-center text-gray-500">No open reports.</div>
+            ) : (
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-800/60 text-left">
+                    <th className="px-5 py-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Reporter</th>
+                    <th className="px-5 py-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Category</th>
+                    <th className="px-5 py-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Status</th>
+                    <th className="px-5 py-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Date</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-800/60">
+                  {reports.map((r) => (
+                    <tr key={r.id} className="hover:bg-gray-800/30 transition-colors">
+                      <td className="px-5 py-4 text-sm text-white">{r.reporter?.username ?? 'Unknown'}</td>
+                      <td className="px-5 py-4 text-sm text-gray-400">{r.category}</td>
+                      <td className="px-5 py-4">
+                        <span className="px-2.5 py-1 rounded-md text-xs font-medium bg-yellow-600/10 text-yellow-400 border border-yellow-500/10">{r.status}</span>
+                      </td>
+                      <td className="px-5 py-4 text-sm text-gray-500">{new Date(r.createdAt).toLocaleDateString()}</td>
                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-800">
-                    {reports.map((r) => (
-                      <tr key={r.id} className="hover:bg-gray-800/50">
-                        <td className="px-6 py-4 text-sm">{r.reporter?.username ?? 'Unknown'}</td>
-                        <td className="px-6 py-4 text-sm text-gray-400">{r.category}</td>
-                        <td className="px-6 py-4">
-                          <span className="px-2 py-1 rounded text-xs bg-yellow-900/50 text-yellow-400">{r.status}</span>
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-400">{new Date(r.createdAt).toLocaleDateString()}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )
-            )}
+                  ))}
+                </tbody>
+              </table>
+            )
+          )}
 
-            {activeTab === 'wiki' && (
-              wikiQueue.length === 0 ? (
-                <div className="p-12 text-center text-gray-500">No pending wiki revisions.</div>
-              ) : (
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-gray-800 text-left">
-                      <th className="px-6 py-3 text-xs text-gray-400 uppercase">Page</th>
-                      <th className="px-6 py-3 text-xs text-gray-400 uppercase">Author</th>
-                      <th className="px-6 py-3 text-xs text-gray-400 uppercase">Date</th>
+          {activeTab === 'wiki' && (
+            wikiQueue.length === 0 ? (
+              <div className="p-12 text-center text-gray-500">No pending wiki revisions.</div>
+            ) : (
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-800/60 text-left">
+                    <th className="px-5 py-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Page</th>
+                    <th className="px-5 py-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Author</th>
+                    <th className="px-5 py-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Date</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-800/60">
+                  {wikiQueue.map((r) => (
+                    <tr key={r.id} className="hover:bg-gray-800/30 transition-colors">
+                      <td className="px-5 py-4 text-sm text-white">{r.page?.title}</td>
+                      <td className="px-5 py-4 text-sm text-gray-400">{r.author?.username}</td>
+                      <td className="px-5 py-4 text-sm text-gray-500">{new Date(r.createdAt).toLocaleDateString()}</td>
                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-800">
-                    {wikiQueue.map((r) => (
-                      <tr key={r.id} className="hover:bg-gray-800/50">
-                        <td className="px-6 py-4 text-sm">{r.page?.title}</td>
-                        <td className="px-6 py-4 text-sm text-gray-400">{r.author?.username}</td>
-                        <td className="px-6 py-4 text-sm text-gray-400">{new Date(r.createdAt).toLocaleDateString()}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )
-            )}
-          </div>
-        )}
-      </main>
+                  ))}
+                </tbody>
+              </table>
+            )
+          )}
+        </div>
+      )}
     </div>
   );
 }

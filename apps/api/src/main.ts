@@ -26,6 +26,7 @@ async function bootstrap() {
   const allowedOrigins = process.env.NODE_ENV === 'production'
     ? [
         'https://admin.fatedworld.com',
+        ...(process.env.ADMIN_ORIGIN ? [process.env.ADMIN_ORIGIN] : []),
       ]
     : ['http://localhost:3001', 'http://localhost:3000'];
 
