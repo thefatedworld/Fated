@@ -1,0 +1,40 @@
+apiVersion: run.googleapis.com/v1
+kind: Job
+metadata:
+  name: fated-migrate-staging
+  annotations:
+    run.googleapis.com/launch-stage: BETA
+spec:
+  template:
+    spec:
+      taskCount: 1
+      template:
+        spec:
+          maxRetries: 1
+          timeoutSeconds: 300
+          serviceAccountName: fated-api-sa@fatedworld-staging.iam.gserviceaccount.com
+          containers:
+            - image: us-central1-docker.pkg.dev/fatedworld-staging/fatedworld/api:latest
+              command:
+                - sh
+              args:
+                - -c
+                - cd /app/apps/api && npx prisma migrate deploy
+              env:
+                - name: NODE_ENV
+                  value: production
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: database-url-staging
+                      key: latest
+              resources:
+                limits:
+                  cpu: "1"
+                  memory: 512Mi
+          volumes: []
+        metadata:
+          annotations:
+            run.googleapis.com/cloudsql-instances: fatedworld-staging:us-central1:fated-staging
+            run.googleapis.com/vpc-access-connector: projects/fatedworld-staging/locations/us-central1/connectors/fated-connector-staging
+            run.googleapis.com/vpc-access-egress: all-traffic

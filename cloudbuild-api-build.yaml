@@ -1,0 +1,14 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - build
+      - -t
+      - us-central1-docker.pkg.dev/fatedworld-staging/fatedworld/api:latest
+      - -f
+      - apps/api/Dockerfile
+      - .
+images:
+  - 'us-central1-docker.pkg.dev/fatedworld-staging/fatedworld/api:latest'
+options:
+  machineType: E2_HIGHCPU_8
+timeout: 1200s

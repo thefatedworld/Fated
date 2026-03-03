@@ -47,13 +47,12 @@ resource "google_project_service" "apis" {
     "redis.googleapis.com",
     "bigquery.googleapis.com",
     "firebase.googleapis.com",
-    "cloudarmor.googleapis.com",
     "vpcaccess.googleapis.com",
     "servicenetworking.googleapis.com",
     "iam.googleapis.com",
     "logging.googleapis.com",
     "monitoring.googleapis.com",
-    "errorreporting.googleapis.com",
+    "clouderrorreporting.googleapis.com",
   ])
 
   service            = each.key
@@ -321,18 +320,9 @@ resource "google_pubsub_topic" "distribution_jobs" {
   name = "distribution-jobs-${local.env}"
 }
 
-# BigQuery subscription for analytics events
-resource "google_pubsub_subscription" "analytics_bq_sub" {
-  name  = "analytics-events-bq-${local.env}"
-  topic = google_pubsub_topic.analytics_events.name
-
-  bigquery_config {
-    table            = "${local.project_id}:${google_bigquery_dataset.analytics.dataset_id}.events_raw"
-    write_metadata   = true
-  }
-
-  depends_on = [google_bigquery_table.events_raw]
-}
+# Note: Pub/Sub → BigQuery direct subscription configured in Phase 4
+# (requires full analytics schema alignment). The analytics module uses
+# direct BigQuery streaming inserts in the meantime.
 
 # ─── Cloud Tasks Queues ───────────────────────────────────────────────────────
 
@@ -449,49 +439,56 @@ resource "google_bigquery_table" "events_raw" {
 # ─── Secret Manager (placeholder secrets — values set manually) ───────────────
 
 resource "google_secret_manager_secret" "db_password" {
-  secret_id = "db-password-${local.env}"
+  secret_id  = "db-password-${local.env}"
+  depends_on = [google_project_service.apis]
   replication {
     auto {}
   }
 }
 
 resource "google_secret_manager_secret" "jwt_access_secret" {
-  secret_id = "jwt-access-secret-${local.env}"
+  secret_id  = "jwt-access-secret-${local.env}"
+  depends_on = [google_project_service.apis]
   replication {
     auto {}
   }
 }
 
 resource "google_secret_manager_secret" "jwt_refresh_secret" {
-  secret_id = "jwt-refresh-secret-${local.env}"
+  secret_id  = "jwt-refresh-secret-${local.env}"
+  depends_on = [google_project_service.apis]
   replication {
     auto {}
   }
 }
 
 resource "google_secret_manager_secret" "internal_api_secret" {
-  secret_id = "internal-api-secret-${local.env}"
+  secret_id  = "internal-api-secret-${local.env}"
+  depends_on = [google_project_service.apis]
   replication {
     auto {}
   }
 }
 
 resource "google_secret_manager_secret" "fcm_service_account" {
-  secret_id = "fcm-service-account-${local.env}"
+  secret_id  = "fcm-service-account-${local.env}"
+  depends_on = [google_project_service.apis]
   replication {
     auto {}
   }
 }
 
-resource "google_secret_manager_secret" "openai_api_key" {
-  secret_id = "openai-api-key-${local.env}"
+resource "google_secret_manager_secret" "anthropic_api_key" {
+  secret_id  = "anthropic-api-key-${local.env}"
+  depends_on = [google_project_service.apis]
   replication {
     auto {}
   }
 }
 
 resource "google_secret_manager_secret" "cdn_signing_key" {
-  secret_id = "cdn-signing-key-${local.env}"
+  secret_id  = "cdn-signing-key-${local.env}"
+  depends_on = [google_project_service.apis]
   replication {
     auto {}
   }

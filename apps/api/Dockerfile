@@ -29,6 +29,8 @@ FROM node:20-alpine AS runner
 
 WORKDIR /app
 
+RUN apk add --no-cache openssl
+
 RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
 
 # Install Cloud SQL Auth Proxy
@@ -49,8 +51,9 @@ COPY --from=builder /app/apps/api/node_modules ./apps/api/node_modules
 
 WORKDIR /app/apps/api
 
-# Non-root user
+# Non-root user — chown all files so Prisma CLI can write engine binaries
 RUN addgroup -S fated && adduser -S fated -G fated
+RUN chown -R fated:fated /app
 USER fated
 
 EXPOSE 3000
