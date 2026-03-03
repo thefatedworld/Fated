@@ -79,7 +79,7 @@ jobs:
           SQL="${{ secrets.GCP_PROD_CLOUD_SQL_CONNECTION }}"
           DB_PASS=$(gcloud secrets versions access latest \
             --secret=db-password-prod --project="${PROJ}")
-          DB_PASS_ENC=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.stdin.read(), safe=''))" <<< "${DB_PASS}")
+          DB_PASS_ENC=$(printf '%s' "${DB_PASS}" | python3 -c "import urllib.parse,sys; sys.stdout.write(urllib.parse.quote(sys.stdin.read(), safe=''))")
           DB_URL="postgresql://fatedworld_api:${DB_PASS_ENC}@localhost/fatedworld?host=/cloudsql/${SQL}"
 
           if gcloud secrets describe database-url-prod --project="${PROJ}" &>/dev/null; then

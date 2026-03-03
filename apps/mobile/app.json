@@ -40,6 +40,15 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "ffa7fb41-bfd5-4af0-9d83-f9752b098050"
+      }
+    },
+    "owner": "plant-pilot"
   }
 }
