@@ -88,6 +88,8 @@ jobs:
       - name: Deploy to Cloud Run (STAGING)
         run: |
           IMAGE="${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
+          SHORT_SHA="${{ github.sha }}"
+          SHORT_SHA="${SHORT_SHA::7}"
           gcloud run deploy fated-api-staging \
             --image="${IMAGE}" \
             --region=${{ env.REGION }} \
@@ -106,7 +108,7 @@ jobs:
             --port=3000 \
             --platform=managed \
             --no-traffic \
-            --tag=v-${{ github.sha }}
+            --tag="v-${SHORT_SHA}"
 
       - name: Smoke test new revision
         run: |
