@@ -23,6 +23,12 @@
   "devDependencies": {
     "typescript": "^5.4.5"
   },
+  "pnpm": {
+    "overrides": {
+      "react": "18.2.0",
+      "react-native": "0.74.5"
+    }
+  },
   "engines": {
     "node": ">=20.0.0",
     "pnpm": ">=9.0.0"
