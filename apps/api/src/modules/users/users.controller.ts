@@ -55,6 +55,12 @@ export class UsersController {
     );
   }
 
+  @Get('me/notification-preferences')
+  @ApiOperation({ summary: 'Get my notification preferences' })
+  getNotificationPreferences(@CurrentUser() user: AuthenticatedUser) {
+    return this.usersService.getNotificationPreferences(user.id);
+  }
+
   @Patch('me/notification-preferences')
   @ApiOperation({ summary: 'Update notification preferences' })
   updateNotificationPreferences(

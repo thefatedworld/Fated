@@ -195,10 +195,10 @@ export const api = {
 
   // Entitlements
   checkEntitlement: (episodeId: string) =>
-    apiFetch<EntitlementCheck>(`/v1/entitlements/check?episodeId=${episodeId}`),
+    apiFetch<EntitlementCheck>(`/v1/episodes/${episodeId}/entitlement`),
 
   unlockEpisode: (episodeId: string) =>
-    apiFetch<EntitlementCheck>('/v1/entitlements/unlock', { method: 'POST', body: JSON.stringify({ episodeId }) }),
+    apiFetch<EntitlementCheck>(`/v1/episodes/${episodeId}/unlock`, { method: 'POST' }),
 
   // IAP
   validateAppleIAP: (jwsTransaction: string) =>
@@ -274,5 +274,5 @@ export const api = {
 
   // Compliance
   requestDataExport: () =>
-    apiFetch<void>('/v1/users/me/data-export', { method: 'POST' }),
+    apiFetch<void>('/v1/account/data-export', { method: 'POST' }),
 };

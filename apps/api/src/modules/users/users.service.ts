@@ -105,6 +105,14 @@ export class UsersService {
     });
   }
 
+  async getNotificationPreferences(userId: string) {
+    return this.prisma.notificationPreference.upsert({
+      where: { userId },
+      update: {},
+      create: { userId },
+    });
+  }
+
   async updateNotificationPreferences(
     userId: string,
     prefs: Partial<{

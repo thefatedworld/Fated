@@ -1,3 +1,4 @@
+.claude/
 node_modules/
 dist/
 .env
@@ -8,7 +9,9 @@ dist/
 .terraform/
 *.tfstate
 *.tfstate.backup
-.terraform.lock.hcl
+# .terraform.lock.hcl should be committed (provider lock) — intentionally not ignored
+*.tfvars
+!*.tfvars.example
 coverage/
 .next/
 out/
