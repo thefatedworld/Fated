@@ -9,6 +9,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { HealthIndicatorResult } from '@nestjs/terminus';
+import { Public } from '../../common/decorators/public.decorator';
 
 class RedisHealthIndicator {
   constructor(private readonly redis: RedisService) {}
@@ -37,6 +38,7 @@ export class HealthController {
   }
 
   @Get()
+  @Public()
   @HealthCheck()
   @ApiOperation({ summary: 'Health check — readiness probe' })
   check(): Promise<HealthCheckResult> {
