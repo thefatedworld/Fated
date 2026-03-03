@@ -518,6 +518,16 @@ resource "google_secret_manager_secret" "cdn_signing_key" {
   }
 }
 
+# CI constructs DATABASE_URL from db-password + Cloud SQL connection name and
+# stores it here so Cloud Run can mount it as a secret env var.
+resource "google_secret_manager_secret" "database_url" {
+  secret_id  = "database-url-${local.env}"
+  depends_on = [google_project_service.apis]
+  replication {
+    auto {}
+  }
+}
+
 # ─── Migration Cloud Run Job ───────────────────────────────────────────────────
 # Runs `prisma migrate deploy` against Cloud SQL.
 # Executed manually or via CI before every Cloud Run deploy.

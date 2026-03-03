@@ -138,7 +138,7 @@ gcloud run jobs execute fated-migrate-staging \
   --region=us-central1 --project=fatedworld-staging --wait
 ```
 
-### 2c-fix. Grant CI service account IAM roles (required before first deploy)
+### 2c-fix. Grant CI service account IAM roles + pre-create secrets (required before first deploy)
 
 The CI service account needs Secret Manager + Redis access. Run this once:
 
@@ -158,7 +158,15 @@ echo "Done. Re-trigger CI:"
 gh workflow run staging.yml --repo thefatedworld/Fated
 ```
 
-> These roles are now in Terraform too. Running `terraform apply` in `terraform/staging/` will make it permanent state.
+Also pre-create the `database-url-staging` secret (CI adds versions to it but can't create it from scratch):
+
+```bash
+gcloud secrets create database-url-staging \
+  --project=fatedworld-staging \
+  --replication-policy=automatic
+```
+
+> These roles and the secret are now in Terraform too. Running `terraform apply` in `terraform/staging/` will make it permanent state.
 
 ### 2d. Verify staging is live
 
