@@ -31,13 +31,20 @@
     },
     "production": {
       "autoIncrement": true,
+      "ios": {
+        "image": "latest"
+      },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://fated-api-712589882982.us-central1.run.app"
+        "EXPO_PUBLIC_API_URL": "https://fated-api-staging-712589882982.us-central1.run.app"
       }
     }
   },
   "submit": {
     "production": {
+      "ios": {
+        "appleId": "simonmuflier@gmail.com",
+        "appleTeamId": "9BQD3D2TKN"
+      },
       "android": {
         "serviceAccountKeyPath": "./google-play-key.json",
         "track": "internal"
