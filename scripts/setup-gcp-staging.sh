@@ -122,6 +122,8 @@ for role in \
   roles/artifactregistry.writer \
   roles/cloudsql.admin \
   roles/secretmanager.secretAccessor \
+  roles/secretmanager.secretVersionManager \
+  roles/redis.viewer \
   roles/iam.serviceAccountUser; do
   gcloud projects add-iam-policy-binding "$STAGING_PROJECT_ID" \
     --member="serviceAccount:$CLOUDBUILD_SA" \

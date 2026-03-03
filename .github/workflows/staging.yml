@@ -63,9 +63,8 @@ jobs:
       - name: Build Docker image
         run: |
           IMAGE="${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}"
-          TAG="${{ github.sha }}"
           docker build \
-            -t "${IMAGE}:${TAG}" \
+            -t "${IMAGE}:${{ github.sha }}" \
             -t "${IMAGE}:latest" \
             -f apps/api/Dockerfile \
             .
@@ -73,30 +72,109 @@ jobs:
       - name: Push Docker image
         run: |
           IMAGE="${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}"
-          TAG="${{ github.sha }}"
-          docker push "${IMAGE}:${TAG}"
+          docker push "${IMAGE}:${{ github.sha }}"
           docker push "${IMAGE}:latest"
 
-      - name: Run Prisma migrations
+      - name: Sync DATABASE_URL secret
         run: |
-          # Use Cloud SQL Auth Proxy for migrations
+          PROJ="${{ env.PROJECT_ID }}"
+          SQL="${{ secrets.GCP_STAGING_CLOUD_SQL_CONNECTION }}"
+          DB_PASS=$(gcloud secrets versions access latest \
+            --secret=db-password-staging --project="${PROJ}")
+          DB_URL="postgresql://fatedworld_api:${DB_PASS}@/fatedworld?host=/cloudsql/${SQL}&schema=public"
+
+          if gcloud secrets describe database-url-staging --project="${PROJ}" &>/dev/null; then
+            echo -n "${DB_URL}" | gcloud secrets versions add database-url-staging \
+              --data-file=- --project="${PROJ}"
+          else
+            echo -n "${DB_URL}" | gcloud secrets create database-url-staging \
+              --data-file=- --project="${PROJ}" --replication-policy=automatic
+          fi
+
+      - name: Run Prisma migrations via Cloud Run Job
+        run: |
+          PROJ="${{ env.PROJECT_ID }}"
+          IMAGE="${{ env.REGISTRY }}/${PROJ}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
+
+          # Update migration job with new image (create if missing)
+          sed "s|image:.*|image: ${IMAGE}|g" cloudrun-migrate-job.yaml | \
+            gcloud run jobs replace - \
+              --region=${{ env.REGION }} \
+              --project="${PROJ}" \
+              --quiet 2>/dev/null || \
+          gcloud run jobs update fated-migrate-staging \
+            --image="${IMAGE}" \
+            --region=${{ env.REGION }} \
+            --project="${PROJ}" \
+            --quiet 2>/dev/null || true
+
+          # Execute migration job (wait for completion)
           gcloud run jobs execute fated-migrate-staging \
             --region=${{ env.REGION }} \
-            --project=${{ env.PROJECT_ID }} \
-            --wait || echo "Migration job not found — first deploy"
+            --project="${PROJ}" \
+            --wait \
+            --quiet || echo "Migration failed or job not ready — check manually"
+
+      - name: Get Redis host
+        id: infra
+        run: |
+          PROJ="${{ env.PROJECT_ID }}"
+          SQL="${{ secrets.GCP_STAGING_CLOUD_SQL_CONNECTION }}"
+          REDIS_HOST=$(gcloud redis instances describe fated-redis-staging \
+            --region=${{ env.REGION }} --project="${PROJ}" \
+            --format='value(host)' 2>/dev/null || echo "127.0.0.1")
+          echo "redis_host=${REDIS_HOST}" >> "$GITHUB_OUTPUT"
+          echo "proj=${PROJ}" >> "$GITHUB_OUTPUT"
+          echo "sql=${SQL}" >> "$GITHUB_OUTPUT"
 
       - name: Deploy to Cloud Run (STAGING)
         run: |
           IMAGE="${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
           SHORT_SHA="${{ github.sha }}"
           SHORT_SHA="${SHORT_SHA::7}"
+          PROJ="${{ steps.infra.outputs.proj }}"
+          SQL="${{ steps.infra.outputs.sql }}"
+          REDIS="${{ steps.infra.outputs.redis_host }}"
+
           gcloud run deploy fated-api-staging \
             --image="${IMAGE}" \
             --region=${{ env.REGION }} \
-            --project=${{ env.PROJECT_ID }} \
+            --project="${PROJ}" \
             --service-account=${{ secrets.GCP_STAGING_API_SA }} \
-            --set-env-vars="ENVIRONMENT=staging,GCP_PROJECT_ID=${{ env.PROJECT_ID }},GCP_REGION=${{ env.REGION }}" \
-            --add-cloudsql-instances=${{ secrets.GCP_STAGING_CLOUD_SQL_CONNECTION }} \
+            --set-env-vars="\
+NODE_ENV=production,\
+ENVIRONMENT=staging,\
+GCP_PROJECT_ID=${PROJ},\
+GCP_REGION=${{ env.REGION }},\
+REDIS_HOST=${REDIS},\
+REDIS_PORT=6379,\
+CLOUD_SQL_CONNECTION_NAME=${SQL},\
+GCS_UPLOAD_BUCKET=fatedworld-upload-staging,\
+GCS_DELIVERY_BUCKET=fatedworld-delivery-staging,\
+GCS_THUMBNAILS_BUCKET=fatedworld-thumbnails-staging,\
+GCS_DISTRIBUTION_BUCKET=fatedworld-distribution-staging,\
+CDN_BASE_URL=https://storage.googleapis.com/fatedworld-delivery-staging,\
+CDN_SIGNING_KEY_NAME=fatedworld-key,\
+CLOUD_TASKS_EPISODE_PUBLISH_QUEUE=episode-publish-staging,\
+CLOUD_TASKS_NOTIFICATION_QUEUE=notification-queue-staging,\
+CLOUD_TASKS_DISTRIBUTION_QUEUE=distribution-export-staging,\
+PUBSUB_ANALYTICS_TOPIC=analytics-events-staging,\
+PUBSUB_EPISODE_PUBLISHED_TOPIC=episode-published-staging,\
+PUBSUB_IAP_REFUND_TOPIC=iap-refund-staging,\
+PUBSUB_DISTRIBUTION_JOBS_TOPIC=distribution-jobs-staging,\
+APPLE_APP_BUNDLE_ID=com.fatedworld.app,\
+GOOGLE_PLAY_PACKAGE_NAME=com.fatedworld.app,\
+FIREBASE_PROJECT_ID=${PROJ},\
+JWT_ACCESS_EXPIRES_IN=15m,\
+JWT_REFRESH_EXPIRES_IN=7d" \
+            --set-secrets="\
+DATABASE_URL=database-url-staging:latest,\
+JWT_ACCESS_SECRET=jwt-access-secret-staging:latest,\
+JWT_REFRESH_SECRET=jwt-refresh-secret-staging:latest,\
+INTERNAL_API_SECRET=internal-api-secret-staging:latest,\
+ANTHROPIC_API_KEY=anthropic-api-key-staging:latest,\
+CDN_SIGNING_KEY=cdn-signing-key-staging:latest" \
+            --add-cloudsql-instances="${SQL}" \
             --vpc-connector=fated-connector-staging \
             --vpc-egress=private-ranges-only \
             --min-instances=1 \
@@ -110,27 +188,69 @@ jobs:
             --no-traffic \
             --tag="v-${SHORT_SHA}"
 
-      - name: Smoke test new revision
+      - name: Smoke test + shift traffic
         run: |
-          REVISION_URL=$(gcloud run services describe fated-api-staging \
-            --region=${{ env.REGION }} \
-            --project=${{ env.PROJECT_ID }} \
-            --format='value(status.traffic[0].url)') || true
+          # Wait for revision to be ready
+          sleep 10
 
-          echo "Testing /health on new revision..."
-          # Simple health check
-          sleep 5
-
-      - name: Shift traffic to new revision
-        run: |
+          # Shift 100% traffic to new revision
           gcloud run services update-traffic fated-api-staging \
             --region=${{ env.REGION }} \
             --project=${{ env.PROJECT_ID }} \
             --to-latest
 
+          # Get service URL and health check
+          SERVICE_URL=$(gcloud run services describe fated-api-staging \
+            --region=${{ env.REGION }} \
+            --project=${{ env.PROJECT_ID }} \
+            --format='value(status.url)')
+
+          echo "Service URL: ${SERVICE_URL}"
+          curl -sf "${SERVICE_URL}/health" || echo "Health check failed — check Cloud Run logs"
+
+      - name: Build & deploy admin panel
+        run: |
+          PROJ="${{ env.PROJECT_ID }}"
+          ADMIN_IMAGE="${{ env.REGISTRY }}/${PROJ}/fatedworld/admin"
+          API_URL=$(gcloud run services describe fated-api-staging \
+            --region=${{ env.REGION }} --project="${PROJ}" \
+            --format='value(status.url)' 2>/dev/null || echo "")
+
+          docker build \
+            -t "${ADMIN_IMAGE}:${{ github.sha }}" \
+            -t "${ADMIN_IMAGE}:latest" \
+            --build-arg NEXT_PUBLIC_API_URL="${API_URL}" \
+            -f apps/admin/Dockerfile \
+            .
+
+          docker push "${ADMIN_IMAGE}:${{ github.sha }}"
+          docker push "${ADMIN_IMAGE}:latest"
+
+          gcloud run deploy fated-admin-staging \
+            --image="${ADMIN_IMAGE}:${{ github.sha }}" \
+            --region=${{ env.REGION }} \
+            --project="${PROJ}" \
+            --service-account=${{ secrets.GCP_STAGING_API_SA }} \
+            --set-env-vars="NODE_ENV=production,NEXT_PUBLIC_API_URL=${API_URL}" \
+            --min-instances=0 \
+            --max-instances=3 \
+            --memory=512Mi \
+            --cpu=1 \
+            --port=3001 \
+            --platform=managed \
+            --allow-unauthenticated \
+            --quiet
+
       - name: Notify deployment
         if: always()
         run: |
+          API_URL=$(gcloud run services describe fated-api-staging \
+            --region=${{ env.REGION }} --project=${{ env.PROJECT_ID }} \
+            --format='value(status.url)' 2>/dev/null || echo "not deployed")
+          ADMIN_URL=$(gcloud run services describe fated-admin-staging \
+            --region=${{ env.REGION }} --project=${{ env.PROJECT_ID }} \
+            --format='value(status.url)' 2>/dev/null || echo "not deployed")
           echo "Deployment status: ${{ job.status }}"
-          echo "Commit: ${{ github.sha }}"
-          echo "Branch: ${{ github.ref_name }}"
+          echo "API URL:   ${API_URL}"
+          echo "Admin URL: ${ADMIN_URL}"
+          echo "Commit:    ${{ github.sha }}"

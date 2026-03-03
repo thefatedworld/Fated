@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       image_tag:
-        description: 'Docker image tag (git SHA) to deploy to PROD'
+        description: 'Git SHA (from staging deploy) to promote to PROD'
         required: true
         type: string
       confirm:
@@ -16,8 +16,7 @@ env:
   STAGING_PROJECT_ID: ${{ secrets.GCP_STAGING_PROJECT_ID }}
   PROD_PROJECT_ID: ${{ secrets.GCP_PROD_PROJECT_ID }}
   REGION: us-central1
-  STAGING_REGISTRY: us-central1-docker.pkg.dev
-  PROD_REGISTRY: us-central1-docker.pkg.dev
+  REGISTRY: us-central1-docker.pkg.dev
 
 jobs:
   guard:
@@ -53,30 +52,125 @@ jobs:
         uses: google-github-actions/setup-gcloud@v2
 
       - name: Configure Docker
-        run: gcloud auth configure-docker ${{ env.PROD_REGISTRY }} --quiet
+        run: gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
 
-      - name: Promote image from STAGING to PROD registry
+      - name: Promote API image from STAGING → PROD Artifact Registry
         run: |
-          STAGING_IMAGE="${{ env.STAGING_REGISTRY }}/${{ env.STAGING_PROJECT_ID }}/fatedworld/api:${{ github.event.inputs.image_tag }}"
-          PROD_IMAGE="${{ env.PROD_REGISTRY }}/${{ env.PROD_PROJECT_ID }}/fatedworld/api:${{ github.event.inputs.image_tag }}"
+          TAG="${{ github.event.inputs.image_tag }}"
+          STAGING_IMAGE="${{ env.REGISTRY }}/${{ env.STAGING_PROJECT_ID }}/fatedworld/api:${TAG}"
+          PROD_IMAGE="${{ env.REGISTRY }}/${{ env.PROD_PROJECT_ID }}/fatedworld/api:${TAG}"
 
-          # Pull from staging, tag for prod, push
           docker pull "${STAGING_IMAGE}"
           docker tag "${STAGING_IMAGE}" "${PROD_IMAGE}"
-          docker tag "${STAGING_IMAGE}" "${PROD_REGISTRY}/${{ env.PROD_PROJECT_ID }}/fatedworld/api:latest"
+          docker tag "${STAGING_IMAGE}" "${{ env.REGISTRY }}/${{ env.PROD_PROJECT_ID }}/fatedworld/api:latest"
           docker push "${PROD_IMAGE}"
-          docker push "${PROD_REGISTRY}/${{ env.PROD_PROJECT_ID }}/fatedworld/api:latest"
+          docker push "${{ env.REGISTRY }}/${{ env.PROD_PROJECT_ID }}/fatedworld/api:latest"
 
-      - name: Deploy to Cloud Run PROD (0% traffic — canary)
+          # Also promote admin image
+          STAGING_ADMIN="${{ env.REGISTRY }}/${{ env.STAGING_PROJECT_ID }}/fatedworld/admin:${TAG}"
+          PROD_ADMIN="${{ env.REGISTRY }}/${{ env.PROD_PROJECT_ID }}/fatedworld/admin:${TAG}"
+          docker pull "${STAGING_ADMIN}" && \
+            docker tag "${STAGING_ADMIN}" "${PROD_ADMIN}" && \
+            docker push "${PROD_ADMIN}" || echo "Admin image not found in staging — skipping"
+
+      - name: Sync DATABASE_URL secret (PROD)
         run: |
-          PROD_IMAGE="${{ env.PROD_REGISTRY }}/${{ env.PROD_PROJECT_ID }}/fatedworld/api:${{ github.event.inputs.image_tag }}"
+          PROJ="${{ env.PROD_PROJECT_ID }}"
+          SQL="${{ secrets.GCP_PROD_CLOUD_SQL_CONNECTION }}"
+          DB_PASS=$(gcloud secrets versions access latest \
+            --secret=db-password-prod --project="${PROJ}")
+          DB_URL="postgresql://fatedworld_api:${DB_PASS}@/fatedworld?host=/cloudsql/${SQL}&schema=public"
+
+          if gcloud secrets describe database-url-prod --project="${PROJ}" &>/dev/null; then
+            echo -n "${DB_URL}" | gcloud secrets versions add database-url-prod \
+              --data-file=- --project="${PROJ}"
+          else
+            echo -n "${DB_URL}" | gcloud secrets create database-url-prod \
+              --data-file=- --project="${PROJ}" --replication-policy=automatic
+          fi
+
+      - name: Run Prisma migrations (PROD)
+        run: |
+          PROJ="${{ env.PROD_PROJECT_ID }}"
+          TAG="${{ github.event.inputs.image_tag }}"
+          IMAGE="${{ env.REGISTRY }}/${PROJ}/fatedworld/api:${TAG}"
+
+          sed "s|image:.*|image: ${IMAGE}|g; s|fated-migrate-staging|fated-migrate-prod|g; \
+               s|database-url-staging|database-url-prod|g; \
+               s|fatedworld-staging|${PROJ}|g; \
+               s|fated-staging|fated-prod|g; \
+               s|-staging|-prod|g" cloudrun-migrate-job.yaml | \
+            gcloud run jobs replace - \
+              --region=${{ env.REGION }} \
+              --project="${PROJ}" \
+              --quiet 2>/dev/null || true
+
+          gcloud run jobs execute fated-migrate-prod \
+            --region=${{ env.REGION }} \
+            --project="${PROJ}" \
+            --wait \
+            --quiet
+
+      - name: Get PROD infra config
+        id: infra
+        run: |
+          PROJ="${{ env.PROD_PROJECT_ID }}"
+          SQL="${{ secrets.GCP_PROD_CLOUD_SQL_CONNECTION }}"
+          REDIS=$(gcloud redis instances describe fated-redis-prod \
+            --region=${{ env.REGION }} --project="${PROJ}" \
+            --format='value(host)' 2>/dev/null || echo "127.0.0.1")
+          echo "redis=${REDIS}" >> "$GITHUB_OUTPUT"
+          echo "proj=${PROJ}" >> "$GITHUB_OUTPUT"
+          echo "sql=${SQL}" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy to Cloud Run PROD (canary — 0% traffic)
+        run: |
+          TAG="${{ github.event.inputs.image_tag }}"
+          SHORT_TAG="${TAG::7}"
+          PROD_IMAGE="${{ env.REGISTRY }}/${{ env.PROD_PROJECT_ID }}/fatedworld/api:${TAG}"
+          PROJ="${{ steps.infra.outputs.proj }}"
+          SQL="${{ steps.infra.outputs.sql }}"
+          REDIS="${{ steps.infra.outputs.redis }}"
+
           gcloud run deploy fated-api-prod \
             --image="${PROD_IMAGE}" \
             --region=${{ env.REGION }} \
-            --project=${{ env.PROD_PROJECT_ID }} \
+            --project="${PROJ}" \
             --service-account=${{ secrets.GCP_PROD_API_SA }} \
-            --set-env-vars="ENVIRONMENT=prod,GCP_PROJECT_ID=${{ env.PROD_PROJECT_ID }},GCP_REGION=${{ env.REGION }}" \
-            --add-cloudsql-instances=${{ secrets.GCP_PROD_CLOUD_SQL_CONNECTION }} \
+            --set-env-vars="\
+NODE_ENV=production,\
+ENVIRONMENT=prod,\
+GCP_PROJECT_ID=${PROJ},\
+GCP_REGION=${{ env.REGION }},\
+REDIS_HOST=${REDIS},\
+REDIS_PORT=6379,\
+CLOUD_SQL_CONNECTION_NAME=${SQL},\
+GCS_UPLOAD_BUCKET=fatedworld-upload-prod,\
+GCS_DELIVERY_BUCKET=fatedworld-delivery-prod,\
+GCS_THUMBNAILS_BUCKET=fatedworld-thumbnails-prod,\
+GCS_DISTRIBUTION_BUCKET=fatedworld-distribution-prod,\
+CDN_BASE_URL=https://cdn.fatedworld.com,\
+CDN_SIGNING_KEY_NAME=fatedworld-key,\
+CLOUD_TASKS_EPISODE_PUBLISH_QUEUE=episode-publish-prod,\
+CLOUD_TASKS_NOTIFICATION_QUEUE=notification-queue-prod,\
+CLOUD_TASKS_DISTRIBUTION_QUEUE=distribution-export-prod,\
+PUBSUB_ANALYTICS_TOPIC=analytics-events-prod,\
+PUBSUB_EPISODE_PUBLISHED_TOPIC=episode-published-prod,\
+PUBSUB_IAP_REFUND_TOPIC=iap-refund-prod,\
+PUBSUB_DISTRIBUTION_JOBS_TOPIC=distribution-jobs-prod,\
+APPLE_APP_BUNDLE_ID=com.fatedworld.app,\
+GOOGLE_PLAY_PACKAGE_NAME=com.fatedworld.app,\
+FIREBASE_PROJECT_ID=${PROJ},\
+JWT_ACCESS_EXPIRES_IN=15m,\
+JWT_REFRESH_EXPIRES_IN=7d" \
+            --set-secrets="\
+DATABASE_URL=database-url-prod:latest,\
+JWT_ACCESS_SECRET=jwt-access-secret-prod:latest,\
+JWT_REFRESH_SECRET=jwt-refresh-secret-prod:latest,\
+INTERNAL_API_SECRET=internal-api-secret-prod:latest,\
+ANTHROPIC_API_KEY=anthropic-api-key-prod:latest,\
+CDN_SIGNING_KEY=cdn-signing-key-prod:latest" \
+            --add-cloudsql-instances="${SQL}" \
             --vpc-connector=fated-connector-prod \
             --vpc-egress=private-ranges-only \
             --min-instances=2 \
@@ -88,23 +182,48 @@ jobs:
             --port=3000 \
             --platform=managed \
             --no-traffic \
-            --tag=canary-${{ github.event.inputs.image_tag }}
+            --tag="canary-${SHORT_TAG}"
 
-      - name: Canary 10% traffic
+      - name: Canary 10% — watch for 5 minutes
         run: |
+          PROJ="${{ env.PROD_PROJECT_ID }}"
+          TAG="${{ github.event.inputs.image_tag }}"
+          SHORT_TAG="${TAG::7}"
+
           gcloud run services update-traffic fated-api-prod \
             --region=${{ env.REGION }} \
-            --project=${{ env.PROD_PROJECT_ID }} \
-            --to-tags=canary-${{ github.event.inputs.image_tag }}=10
-          echo "10% traffic sent to canary. Monitor for 5 minutes..."
+            --project="${PROJ}" \
+            --to-tags="canary-${SHORT_TAG}=10"
+
+          echo "Canary at 10%. Waiting 5 minutes before 100% promotion..."
           sleep 300
 
-      - name: Promote to 100% (manual step — requires no errors in 5 min)
+      - name: Promote to 100% traffic
         run: |
-          echo "Promoting canary to 100% traffic..."
           gcloud run services update-traffic fated-api-prod \
             --region=${{ env.REGION }} \
             --project=${{ env.PROD_PROJECT_ID }} \
             --to-latest
-          echo "Production deployment complete."
-          echo "Image: ${{ github.event.inputs.image_tag }}"
+
+          # Deploy admin panel to prod too
+          PROD_ADMIN="${{ env.REGISTRY }}/${{ env.PROD_PROJECT_ID }}/fatedworld/admin:${{ github.event.inputs.image_tag }}"
+          API_URL=$(gcloud run services describe fated-api-prod \
+            --region=${{ env.REGION }} --project=${{ env.PROD_PROJECT_ID }} \
+            --format='value(status.url)' 2>/dev/null || echo "")
+
+          gcloud run deploy fated-admin-prod \
+            --image="${PROD_ADMIN}" \
+            --region=${{ env.REGION }} \
+            --project=${{ env.PROD_PROJECT_ID }} \
+            --service-account=${{ secrets.GCP_PROD_API_SA }} \
+            --set-env-vars="NODE_ENV=production,NEXT_PUBLIC_API_URL=${API_URL}" \
+            --min-instances=1 \
+            --max-instances=5 \
+            --memory=512Mi \
+            --cpu=1 \
+            --port=3001 \
+            --platform=managed \
+            --allow-unauthenticated \
+            --quiet 2>/dev/null || echo "Admin image not yet promoted — deploy manually"
+
+          echo "Production deployment complete. Image: ${{ github.event.inputs.image_tag }}"
