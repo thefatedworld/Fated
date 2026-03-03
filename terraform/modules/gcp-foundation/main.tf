@@ -243,6 +243,30 @@ resource "google_project_iam_member" "cloudbuild_ar_writer" {
   member  = "serviceAccount:${google_service_account.cloudbuild_sa.email}"
 }
 
+resource "google_project_iam_member" "cloudbuild_secret_accessor" {
+  project = local.project_id
+  role    = "roles/secretmanager.secretAccessor"
+  member  = "serviceAccount:${google_service_account.cloudbuild_sa.email}"
+}
+
+resource "google_project_iam_member" "cloudbuild_secret_version_manager" {
+  project = local.project_id
+  role    = "roles/secretmanager.secretVersionManager"
+  member  = "serviceAccount:${google_service_account.cloudbuild_sa.email}"
+}
+
+resource "google_project_iam_member" "cloudbuild_redis_viewer" {
+  project = local.project_id
+  role    = "roles/redis.viewer"
+  member  = "serviceAccount:${google_service_account.cloudbuild_sa.email}"
+}
+
+resource "google_project_iam_member" "cloudbuild_sa_user" {
+  project = local.project_id
+  role    = "roles/iam.serviceAccountUser"
+  member  = "serviceAccount:${google_service_account.cloudbuild_sa.email}"
+}
+
 # ─── GCS Buckets ──────────────────────────────────────────────────────────────
 
 resource "google_storage_bucket" "upload" {
