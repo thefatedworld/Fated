@@ -11,12 +11,12 @@ import {
   DistributionPlatform,
   UserRole,
 } from '@prisma/client';
-import OpenAI from 'openai';
+import Anthropic from '@anthropic-ai/sdk';
 
 @Injectable()
 export class DistributionService {
   private readonly logger = new Logger(DistributionService.name);
-  private openai: OpenAI | null = null;
+  private anthropic: Anthropic | null = null;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -26,13 +26,13 @@ export class DistributionService {
     private readonly config: ConfigService,
   ) {}
 
-  private getOpenAI(): OpenAI {
-    if (!this.openai) {
-      this.openai = new OpenAI({
-        apiKey: this.config.get<string>('OPENAI_API_KEY', ''),
+  private getAnthropic(): Anthropic {
+    if (!this.anthropic) {
+      this.anthropic = new Anthropic({
+        apiKey: this.config.get<string>('ANTHROPIC_API_KEY', ''),
       });
     }
-    return this.openai;
+    return this.anthropic;
   }
 
   async createJob(params: {
@@ -150,11 +150,9 @@ export class DistributionService {
     seriesTitle: string,
     platform: DistributionPlatform,
   ) {
-    const openai = this.getOpenAI();
-    const apiKey = this.config.get<string>('OPENAI_API_KEY', '');
+    const apiKey = this.config.get<string>('ANTHROPIC_API_KEY', '');
 
     if (!apiKey) {
-      // Return stubs if no API key configured
       return {
         description: `Watch ${episodeTitle} from ${seriesTitle}!`,
         titleVariants: [episodeTitle, `${seriesTitle}: ${episodeTitle}`, `[New] ${episodeTitle}`],
@@ -170,8 +168,7 @@ export class DistributionService {
       internal: 'Internal distribution description',
     };
 
-    const prompt = `
-You are a social media content writer for a romantasy streaming platform called FatedWorld.
+    const prompt = `You are a social media content writer for a romantasy streaming platform called FatedWorld.
 Generate content for a new episode release.
 
 Series: "${seriesTitle}"
@@ -179,31 +176,32 @@ Episode: "${episodeTitle}"
 Description: "${episodeDescription}"
 Platform: ${platform} (${platformHints[platform]})
 
-Return a JSON object with:
+Return a JSON object with exactly these keys:
 {
   "description": "platform-appropriate description",
   "titleVariants": ["option 1", "option 2", "option 3"],
-  "tags": ["tag1", "tag2", ... (up to 10)],
+  "tags": ["tag1", "tag2"],
   "thumbnailTextSuggestions": ["short text 1", "short text 2", "short text 3"]
-}
-`.trim();
+}`;
 
     try {
-      const response = await openai.chat.completions.create({
-        model: 'gpt-4o',
+      const anthropic = this.getAnthropic();
+      const response = await anthropic.messages.create({
+        model: 'claude-3-5-haiku-20241022',
+        max_tokens: 600,
         messages: [{ role: 'user', content: prompt }],
-        response_format: { type: 'json_object' },
-        max_tokens: 500,
       });
 
-      const content = response.choices[0]?.message?.content ?? '{}';
-      const parsed = JSON.parse(content);
+      const content = response.content[0]?.type === 'text' ? response.content[0].text : '{}';
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      const parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : {};
 
       return {
         description: parsed.description ?? '',
         titleVariants: parsed.titleVariants ?? [episodeTitle],
         tags: parsed.tags ?? [],
-        captionPlaceholder: '[Whisper caption generation coming in Phase 7]',
+        // Phase 7: replace with Google Cloud Speech-to-Text transcription
+        captionPlaceholder: '[Google Cloud Speech-to-Text caption generation — Phase 7]',
       };
     } catch {
       return {
