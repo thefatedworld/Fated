@@ -133,6 +133,16 @@ export default function RootLayout() {
               headerTintColor: '#ffffff',
             }}
           />
+          <Stack.Screen
+            name="author-dashboard"
+            options={{
+              headerShown: true,
+              headerTitle: 'Author Dashboard',
+              headerBackTitle: 'Back',
+              headerStyle: { backgroundColor: '#030712' },
+              headerTintColor: '#ffffff',
+            }}
+          />
           <Stack.Screen name="episode/[id]" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
           <Stack.Screen name="store" options={{ headerShown: false, presentation: 'modal' }} />
         </Stack>

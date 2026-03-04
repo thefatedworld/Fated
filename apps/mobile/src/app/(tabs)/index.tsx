@@ -10,7 +10,7 @@ import {
   Dimensions,
   StyleSheet,
 } from 'react-native';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { api, type Series } from '@/lib/api-client';
 import SeriesCard from '@/components/SeriesCard';
@@ -33,13 +33,30 @@ const GENRES = [
 
 export default function HomeScreen() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const heroRef = useRef<FlatList>(null);
   const [heroIdx, setHeroIdx] = useState(0);
   const [activeGenre, setActiveGenre] = useState('All');
+  const [listedIds, setListedIds] = useState<Set<string>>(new Set());
 
   const { data: series, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['series'],
     queryFn: () => api.listSeries(),
+  });
+
+  const addToWatchlist = useMutation({
+    mutationFn: (seriesId: string) => api.addToWatchlist(seriesId),
+    onSuccess: (_data, seriesId) => {
+      queryClient.invalidateQueries({ queryKey: ['watchlist'] });
+      setListedIds((prev) => new Set(prev).add(seriesId));
+      setTimeout(() => {
+        setListedIds((prev) => {
+          const next = new Set(prev);
+          next.delete(seriesId);
+          return next;
+        });
+      }, 2000);
+    },
   });
 
   const heroSeries = series?.slice(0, 5) ?? [];
@@ -140,8 +157,14 @@ export default function HomeScreen() {
                     <Text style={styles.watchBtnIcon}>▶</Text>
                     <Text style={styles.watchBtnText}>Watch</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.listBtn}>
-                    <Text style={styles.listBtnText}>+ List</Text>
+                  <TouchableOpacity
+                    style={[styles.listBtn, listedIds.has(item.id) && styles.listBtnActive]}
+                    onPress={() => addToWatchlist.mutate(item.id)}
+                    disabled={listedIds.has(item.id)}
+                  >
+                    <Text style={[styles.listBtnText, listedIds.has(item.id) && styles.listBtnTextActive]}>
+                      {listedIds.has(item.id) ? '✓ Listed' : '+ List'}
+                    </Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -281,7 +304,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
   },
+  listBtnActive: {
+    borderColor: '#a855f7',
+    backgroundColor: 'rgba(168,85,247,0.15)',
+  },
   listBtnText: { color: '#fff', fontSize: 14, fontWeight: '500' },
+  listBtnTextActive: { color: '#a855f7' },
   dots: {
     flexDirection: 'row',
     justifyContent: 'center',

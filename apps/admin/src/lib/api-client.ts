@@ -226,14 +226,19 @@ export interface UpdateEpisodeInput {
 export interface DistributionJob {
   id: string;
   episodeId: string;
+  requestedBy: string;
   targetFormat: string;
   targetPlatform: string;
   status: string;
-  outputUrl?: string;
-  aiCopy?: string;
-  error?: string;
+  inputAssetId?: string;
+  outputGcsKey?: string;
+  aiCaption?: string;
+  aiDescription?: string;
+  aiTags: string[];
+  aiTitleVariants?: unknown;
+  errorMessage?: string;
   createdAt: string;
-  updatedAt: string;
+  completedAt?: string;
 }
 
 interface CreateDistributionJobInput {

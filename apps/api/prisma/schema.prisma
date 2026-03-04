@@ -258,6 +258,7 @@ model User {
   episodeAssetsUploaded  EpisodeAsset[]
   wikiReviewsGiven       WikiRevision[]     @relation("WikiReviewer")
   moderationActionsTarget ModerationAction[] @relation("ModerationTargetUser")
+  watchlist              UserWatchlist[]
 
   @@map("users")
 }
@@ -301,6 +302,7 @@ model Series {
   threads      Thread[]
   wikiPages    WikiPage[]
   entitlements Entitlement[]
+  watchlistedBy UserWatchlist[]
 
   @@map("series")
 }
@@ -759,4 +761,21 @@ model AnalyticsDailySnapshot {
   @@unique([date, seriesId])
   @@index([seriesId, date(sort: Desc)])
   @@map("analytics_daily_snapshots")
+}
+
+// ─────────────────────────────────────────────
+// WATCHLIST
+// ─────────────────────────────────────────────
+
+model UserWatchlist {
+  userId    String   @map("user_id") @db.Uuid
+  seriesId  String   @map("series_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  series Series @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+
+  @@id([userId, seriesId])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("user_watchlist")
 }

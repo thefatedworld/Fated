@@ -11,8 +11,8 @@ const STATUS_STYLES: Record<string, string> = {
   failed: 'bg-red-950/60 text-red-400 border-red-800/40',
 };
 
-const PLATFORMS = ['youtube', 'instagram', 'tiktok'];
-const FORMATS = ['vertical_short', 'horizontal_full', 'square_clip'];
+const PLATFORMS = ['youtube', 'instagram', 'tiktok', 'internal'];
+const FORMATS = ['vertical_9_16', 'landscape_16_9', 'square_1_1'];
 
 export default function DistributionPage() {
   const [jobs, setJobs] = useState<DistributionJob[]>([]);
@@ -222,16 +222,11 @@ export default function DistributionPage() {
                   {new Date(job.createdAt).toLocaleDateString()}
                 </td>
                 <td className="px-4 py-3">
-                  {job.outputUrl ? (
-                    <a
-                      href={job.outputUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-purple-400 hover:text-purple-300 text-xs"
-                    >
-                      Download
-                    </a>
-                  ) : job.aiCopy ? (
+                  {job.outputGcsKey ? (
+                    <span className="text-purple-400 text-xs" title={job.outputGcsKey}>
+                      Output ready
+                    </span>
+                  ) : job.aiDescription ? (
                     <span className="text-green-400 text-xs">AI copy ready</span>
                   ) : (
                     <span className="text-gray-600 text-xs">—</span>
@@ -244,18 +239,28 @@ export default function DistributionPage() {
       </div>
 
       {/* AI Copy preview */}
-      {jobs.some((j) => j.aiCopy) && (
+      {jobs.some((j) => j.aiDescription) && (
         <div className="mt-6">
           <h3 className="text-sm font-medium text-gray-400 mb-3">AI-Generated Copy</h3>
           <div className="space-y-3">
-            {jobs.filter((j) => j.aiCopy).map((j) => (
+            {jobs.filter((j) => j.aiDescription).map((j) => (
               <div key={j.id} className="bg-gray-900/80 border border-gray-800 rounded-xl p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="capitalize text-purple-400 text-xs font-medium">{j.targetPlatform}</span>
                   <span className="text-gray-600 text-xs">·</span>
                   <span className="text-gray-500 text-xs">{j.targetFormat.replace(/_/g, ' ')}</span>
                 </div>
-                <p className="text-gray-300 text-sm whitespace-pre-wrap">{j.aiCopy}</p>
+                <p className="text-gray-300 text-sm whitespace-pre-wrap">{j.aiDescription}</p>
+                {j.aiCaption && (
+                  <p className="text-gray-500 text-xs mt-2 italic">{j.aiCaption}</p>
+                )}
+                {j.aiTags.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {j.aiTags.map((tag) => (
+                      <span key={tag} className="bg-gray-800 text-gray-400 text-xs px-2 py-0.5 rounded-md">#{tag}</span>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
           </div>

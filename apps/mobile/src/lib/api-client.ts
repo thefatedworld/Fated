@@ -173,12 +173,38 @@ export interface WikiPage {
   };
 }
 
+export interface WikiRevision {
+  id: string;
+  wikiPageId: string;
+  versionNum: number;
+  authorId: string;
+  authorName?: string;
+  status: 'approved' | 'pending' | 'rejected';
+  createdAt: string;
+}
+
 export interface Entitlement {
   id: string;
   userId: string;
   type: string;
   seriesId?: string;
   episodeId?: string;
+  createdAt: string;
+}
+
+export interface AuthorSeriesStats {
+  seriesId: string;
+  title: string;
+  totalViews: number;
+  subscribers: number;
+  episodeCount: number;
+}
+
+export interface DistributionJob {
+  id: string;
+  seriesId: string;
+  format: 'podcast' | 'audiogram' | 'social_clip';
+  status: 'pending' | 'processing' | 'completed' | 'failed';
   createdAt: string;
 }
 
@@ -266,10 +292,25 @@ export const api = {
       body: JSON.stringify(prefs),
     }),
 
+  // Watchlist
+  getWatchlist: () =>
+    apiFetch<Series[]>('/v1/watchlist'),
+
+  checkWatchlist: (seriesId: string) =>
+    apiFetch<{ onWatchlist: boolean }>(`/v1/watchlist/${seriesId}/check`),
+
+  addToWatchlist: (seriesId: string) =>
+    apiFetch<{ added: boolean }>(`/v1/watchlist/${seriesId}`, { method: 'POST' }),
+
+  removeFromWatchlist: (seriesId: string) =>
+    apiFetch<{ removed: boolean }>(`/v1/watchlist/${seriesId}`, { method: 'DELETE' }),
+
   // Community
-  listThreads: (type: string, contextId?: string, cursor?: string) => {
-    const params = new URLSearchParams({ type });
-    if (contextId) params.set('contextId', contextId);
+  listThreads: (type?: string, seriesId?: string, sort?: 'new' | 'hot', cursor?: string) => {
+    const params = new URLSearchParams();
+    if (type) params.set('type', type);
+    if (seriesId) params.set('seriesId', seriesId);
+    if (sort) params.set('sort', sort);
     if (cursor) params.set('cursor', cursor);
     return apiFetch<Thread[]>(`/v1/community/threads?${params.toString()}`);
   },
@@ -292,9 +333,33 @@ export const api = {
     }),
 
   vote: (targetType: 'thread' | 'reply', targetId: string, value: 1 | -1) =>
-    apiFetch<void>('/v1/community/votes', {
+    apiFetch<{ voted: boolean; value: number }>(
+      `/v1/community/${targetType === 'thread' ? 'threads' : 'replies'}/${targetId}/vote`,
+      { method: 'POST', body: JSON.stringify({ value }) },
+    ),
+
+  deleteThread: (threadId: string) =>
+    apiFetch<void>(`/v1/community/threads/${threadId}`, { method: 'DELETE' }),
+
+  deleteReply: (replyId: string) =>
+    apiFetch<void>(`/v1/community/replies/${replyId}`, { method: 'DELETE' }),
+
+  reportAbuse: (targetType: string, targetId: string, category: string, description?: string) =>
+    apiFetch<{ id: string }>('/v1/community/reports', {
       method: 'POST',
-      body: JSON.stringify({ targetType, targetId, value }),
+      body: JSON.stringify({ targetType, targetId, category, description }),
+    }),
+
+  pinThread: (threadId: string, pinned: boolean) =>
+    apiFetch<void>(`/v1/admin/moderation/threads/${threadId}/pin`, {
+      method: 'POST',
+      body: JSON.stringify({ pinned }),
+    }),
+
+  lockThread: (threadId: string, locked: boolean) =>
+    apiFetch<void>(`/v1/admin/moderation/threads/${threadId}/lock`, {
+      method: 'POST',
+      body: JSON.stringify({ locked }),
     }),
 
   // Recommendations
@@ -324,6 +389,9 @@ export const api = {
   getWikiPage: (slug: string) =>
     apiFetch<WikiPage>(`/v1/wiki/${slug}`),
 
+  getWikiPageRevisions: (slug: string) =>
+    apiFetch<WikiRevision[]>(`/v1/wiki/${slug}/revisions`),
+
   // Entitlements (list)
   getMyEntitlements: () =>
     apiFetch<Entitlement[]>('/v1/entitlements'),
@@ -331,6 +399,19 @@ export const api = {
   // Search (uses series list with filter on client side — or a query param if API supports it)
   searchSeries: (query: string) =>
     apiFetch<Series[]>(`/v1/series?search=${encodeURIComponent(query)}`),
+
+  // Author analytics
+  getAuthorSeriesAnalytics: (seriesId: string) =>
+    apiFetch<{ seriesId: string; totals: { views: number; unlocks: number }; dailySnapshots: { date: string; views: number; unlocks: number }[] }>(
+      `/v1/author/series/${seriesId}/analytics`,
+    ),
+
+  getAuthorDashboard: () =>
+    apiFetch<AuthorSeriesStats[]>('/v1/author/dashboard'),
+
+  // Distribution jobs
+  listDistributionJobs: () =>
+    apiFetch<DistributionJob[]>('/v1/author/distribution-jobs'),
 
   // Compliance
   requestDataExport: () =>

@@ -1,6 +1,6 @@
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Image, StyleSheet } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api-client';
 import EpisodeCard from '@/components/EpisodeCard';
 import { analytics } from '@/lib/analytics';
@@ -10,6 +10,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 export default function SeriesDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   const { data: series, isLoading: seriesLoading } = useQuery({
     queryKey: ['series', id],
@@ -21,6 +22,29 @@ export default function SeriesDetailScreen() {
     queryKey: ['episodes', id],
     queryFn: () => api.listEpisodes(id),
     enabled: !!id,
+  });
+
+  const { data: watchlistStatus } = useQuery({
+    queryKey: ['watchlist-check', id],
+    queryFn: () => api.checkWatchlist(id),
+    enabled: !!id,
+  });
+
+  const onWatchlist = watchlistStatus?.onWatchlist ?? false;
+
+  const invalidateWatchlist = () => {
+    queryClient.invalidateQueries({ queryKey: ['watchlist'] });
+    queryClient.invalidateQueries({ queryKey: ['watchlist-check', id] });
+  };
+
+  const addToWatchlist = useMutation({
+    mutationFn: () => api.addToWatchlist(id),
+    onSuccess: invalidateWatchlist,
+  });
+
+  const removeFromWatchlist = useMutation({
+    mutationFn: () => api.removeFromWatchlist(id),
+    onSuccess: invalidateWatchlist,
   });
 
   useEffect(() => {
@@ -75,6 +99,20 @@ export default function SeriesDetailScreen() {
         {series.description && (
           <Text style={styles.description}>{series.description}</Text>
         )}
+
+        <TouchableOpacity
+          style={[styles.watchlistBtn, onWatchlist && styles.watchlistBtnActive]}
+          activeOpacity={0.8}
+          onPress={() =>
+            onWatchlist ? removeFromWatchlist.mutate() : addToWatchlist.mutate()
+          }
+          disabled={addToWatchlist.isPending || removeFromWatchlist.isPending}
+        >
+          <Text style={styles.watchlistIcon}>{onWatchlist ? '♥' : '♡'}</Text>
+          <Text style={[styles.watchlistText, onWatchlist && styles.watchlistTextActive]}>
+            {onWatchlist ? 'On My List' : 'Add to List'}
+          </Text>
+        </TouchableOpacity>
       </View>
 
       {/* Episodes */}
@@ -190,6 +228,34 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 22,
     marginTop: 12,
+  },
+  watchlistBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 8,
+    marginTop: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#374151',
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+  },
+  watchlistBtnActive: {
+    borderColor: '#a855f7',
+    backgroundColor: 'rgba(168,85,247,0.12)',
+  },
+  watchlistIcon: {
+    fontSize: 16,
+    color: '#a855f7',
+  },
+  watchlistText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  watchlistTextActive: {
+    color: '#a855f7',
   },
   episodesSection: {
     paddingHorizontal: 16,

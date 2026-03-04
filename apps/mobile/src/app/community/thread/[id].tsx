@@ -8,11 +8,15 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Alert,
   StyleSheet,
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, type Thread, type ThreadReply } from '@/lib/api-client';
+import { useAuthStore } from '@/store/auth.store';
+import ReportModal from '@/components/ReportModal';
+import ModToolbar from '@/components/ModToolbar';
 
 function timeAgo(dateStr: string) {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -27,7 +31,12 @@ function timeAgo(dateStr: string) {
 export default function ThreadDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const queryClient = useQueryClient();
+  const { user } = useAuthStore();
+  const isMod = ['moderator', 'content_admin', 'superadmin'].includes(user?.role ?? '');
+
   const [replyText, setReplyText] = useState('');
+  const [reportVisible, setReportVisible] = useState(false);
+  const [reportReplyId, setReportReplyId] = useState<string | null>(null);
 
   const { data: thread, isLoading: threadLoading } = useQuery({
     queryKey: ['thread', id],
@@ -58,6 +67,24 @@ export default function ThreadDetailScreen() {
     },
   });
 
+  const deleteReplyMutation = useMutation({
+    mutationFn: (replyId: string) => api.deleteReply(replyId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['thread-replies', id] });
+    },
+  });
+
+  const confirmDeleteReply = (replyId: string) => {
+    Alert.alert('Delete Reply', 'Are you sure you want to delete this reply?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => deleteReplyMutation.mutate(replyId),
+      },
+    ]);
+  };
+
   if (threadLoading || repliesLoading) {
     return (
       <View style={[styles.container, styles.center]}>
@@ -76,7 +103,12 @@ export default function ThreadDetailScreen() {
 
   const renderReply = ({ item }: { item: ThreadReply }) => (
     <View style={styles.replyCard}>
-      <Text style={styles.replyBody}>{item.body}</Text>
+      <View style={styles.replyHeader}>
+        <Text style={[styles.replyBody, { flex: 1 }]}>{item.body}</Text>
+        <TouchableOpacity onPress={() => setReportReplyId(item.id)} style={styles.menuButton} activeOpacity={0.7}>
+          <Text style={styles.menuDots}>⋯</Text>
+        </TouchableOpacity>
+      </View>
       <View style={styles.replyMeta}>
         <TouchableOpacity
           onPress={() => voteMutation.mutate({ targetType: 'reply', targetId: item.id, value: 1 })}
@@ -94,6 +126,11 @@ export default function ThreadDetailScreen() {
           <Text style={styles.voteText}>▼</Text>
         </TouchableOpacity>
         <Text style={styles.replyTime}>{timeAgo(item.createdAt)}</Text>
+        {isMod && (
+          <TouchableOpacity onPress={() => confirmDeleteReply(item.id)} style={styles.modDeleteButton} activeOpacity={0.7}>
+            <Text style={styles.modDeleteText}>Delete</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
@@ -109,46 +146,64 @@ export default function ThreadDetailScreen() {
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={
-          <View style={styles.threadCard}>
-            <View style={styles.badges}>
-              {thread.isPinned && (
-                <View style={styles.pinnedBadge}>
-                  <Text style={styles.pinnedText}>Pinned</Text>
+          <>
+            <View style={styles.threadCard}>
+              <View style={styles.threadTopRow}>
+                <View style={[styles.badges, { flex: 1 }]}>
+                  {thread.isPinned && (
+                    <View style={styles.pinnedBadge}>
+                      <Text style={styles.pinnedText}>Pinned</Text>
+                    </View>
+                  )}
+                  {thread.isLocked && (
+                    <View style={styles.lockedBadge}>
+                      <Text style={styles.lockedText}>Locked</Text>
+                    </View>
+                  )}
                 </View>
-              )}
-              {thread.isLocked && (
-                <View style={styles.lockedBadge}>
-                  <Text style={styles.lockedText}>Locked</Text>
-                </View>
-              )}
-            </View>
-            <Text style={styles.threadTitle}>{thread.title}</Text>
-            <Text style={styles.threadBody}>{thread.body}</Text>
-            <View style={styles.threadMeta}>
-              <TouchableOpacity
-                onPress={() => voteMutation.mutate({ targetType: 'thread', targetId: thread.id, value: 1 })}
-                style={styles.voteButton}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.voteText}>▲</Text>
-              </TouchableOpacity>
-              <Text style={styles.voteCount}>{thread.voteCount}</Text>
-              <TouchableOpacity
-                onPress={() => voteMutation.mutate({ targetType: 'thread', targetId: thread.id, value: -1 })}
-                style={styles.voteButton}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.voteText}>▼</Text>
-              </TouchableOpacity>
-              <Text style={styles.replyTime}>{timeAgo(thread.createdAt)}</Text>
+                <TouchableOpacity onPress={() => setReportVisible(true)} style={styles.menuButton} activeOpacity={0.7}>
+                  <Text style={styles.menuDots}>⋯</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.threadTitle}>{thread.title}</Text>
+              <Text style={styles.threadBody}>{thread.body}</Text>
+              <View style={styles.threadMeta}>
+                <TouchableOpacity
+                  onPress={() => voteMutation.mutate({ targetType: 'thread', targetId: thread.id, value: 1 })}
+                  style={styles.voteButton}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.voteText}>▲</Text>
+                </TouchableOpacity>
+                <Text style={styles.voteCount}>{thread.voteCount}</Text>
+                <TouchableOpacity
+                  onPress={() => voteMutation.mutate({ targetType: 'thread', targetId: thread.id, value: -1 })}
+                  style={styles.voteButton}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.voteText}>▼</Text>
+                </TouchableOpacity>
+                <Text style={styles.replyTime}>{timeAgo(thread.createdAt)}</Text>
+              </View>
+
+              <View style={styles.repliesHeader}>
+                <Text style={styles.repliesTitle}>
+                  Replies ({replies?.length ?? 0})
+                </Text>
+              </View>
             </View>
 
-            <View style={styles.repliesHeader}>
-              <Text style={styles.repliesTitle}>
-                Replies ({replies?.length ?? 0})
-              </Text>
-            </View>
-          </View>
+            {isMod && (
+              <ModToolbar
+                threadId={id}
+                isPinned={thread.isPinned}
+                isLocked={thread.isLocked}
+                onAction={() => {
+                  queryClient.invalidateQueries({ queryKey: ['thread', id] });
+                }}
+              />
+            )}
+          </>
         }
         ListEmptyComponent={
           <View style={{ paddingVertical: 40, alignItems: 'center' }}>
@@ -184,6 +239,19 @@ export default function ThreadDetailScreen() {
           </TouchableOpacity>
         </View>
       )}
+
+      <ReportModal
+        visible={reportVisible}
+        onClose={() => setReportVisible(false)}
+        targetType="thread"
+        targetId={id}
+      />
+      <ReportModal
+        visible={!!reportReplyId}
+        onClose={() => setReportReplyId(null)}
+        targetType="reply"
+        targetId={reportReplyId ?? ''}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -197,6 +265,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#1e293b',
   },
+  threadTopRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 2 },
   badges: { flexDirection: 'row', gap: 6, marginBottom: 6 },
   pinnedBadge: {
     backgroundColor: 'rgba(234,179,8,0.15)',
@@ -248,6 +317,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#1e293b',
   },
+  replyHeader: { flexDirection: 'row', alignItems: 'flex-start' },
   replyBody: { color: '#d1d5db', fontSize: 14, lineHeight: 20 },
   replyMeta: {
     flexDirection: 'row',
@@ -259,6 +329,10 @@ const styles = StyleSheet.create({
   voteText: { color: '#6b7280', fontSize: 12 },
   voteCount: { color: '#9ca3af', fontSize: 13, fontWeight: '600', minWidth: 20, textAlign: 'center' },
   replyTime: { color: '#4b5563', fontSize: 12, marginLeft: 8 },
+  menuButton: { padding: 4, marginLeft: 8 },
+  menuDots: { color: '#6b7280', fontSize: 18, fontWeight: '700' },
+  modDeleteButton: { marginLeft: 'auto', paddingHorizontal: 8, paddingVertical: 2, backgroundColor: 'rgba(239,68,68,0.15)', borderRadius: 6 },
+  modDeleteText: { color: '#ef4444', fontSize: 11, fontWeight: '600' },
   emptyText: { color: '#6b7280', fontSize: 14 },
   errorText: { color: '#6b7280', fontSize: 14 },
   replyBar: {

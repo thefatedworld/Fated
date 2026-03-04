@@ -162,6 +162,28 @@ export default function ProfileScreen() {
         </View>
       </View>
 
+      {/* Author Dashboard — visible to verified authors / admins */}
+      {(user.isVerifiedAuthor || user.role === 'content_admin' || user.role === 'superadmin') && (
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Author</Text>
+          <View style={styles.card}>
+            <TouchableOpacity
+              onPress={() => router.push('/author-dashboard')}
+              style={styles.actionRow}
+              activeOpacity={0.7}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View style={styles.authorIcon}>
+                  <Text style={{ color: '#a855f7', fontSize: 14 }}>✦</Text>
+                </View>
+                <Text style={styles.actionText}>Author Dashboard</Text>
+              </View>
+              <Text style={[styles.chevron, { color: '#a855f7' }]}>›</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
       {/* Account actions */}
       <View style={styles.section}>
         <Text style={styles.sectionLabel}>Account</Text>
@@ -316,5 +338,13 @@ const styles = StyleSheet.create({
   chevron: {
     color: '#374151',
     fontSize: 18,
+  },
+  authorIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: 'rgba(168,85,247,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

@@ -36,6 +36,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { ExperimentationModule } from './modules/experimentation/experimentation.module';
 import { RecommendationsModule } from './modules/recommendations/recommendations.module';
 import { DistributionModule } from './modules/distribution/distribution.module';
+import { WatchlistModule } from './modules/watchlist/watchlist.module';
 import { ComplianceModule } from './modules/compliance/compliance.module';
 import { AdminModule } from './modules/admin/admin.module';
 
@@ -77,6 +78,7 @@ import { AdminModule } from './modules/admin/admin.module';
     ExperimentationModule,
     RecommendationsModule,
     DistributionModule,
+    WatchlistModule,
     ComplianceModule,
     AdminModule,
   ],
