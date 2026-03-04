@@ -13,6 +13,9 @@ RUN pnpm install --frozen-lockfile --filter @fated/admin...
 COPY apps/admin/ ./apps/admin/
 COPY tsconfig.base.json ./
 
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+
 # Build Next.js (standalone output)
 RUN pnpm --filter @fated/admin build
 
