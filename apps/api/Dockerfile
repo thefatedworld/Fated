@@ -33,15 +33,13 @@ RUN apk add --no-cache openssl
 
 RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
 
-# Install Cloud SQL Auth Proxy
-# The proxy runs as a sidecar in Cloud Run — not needed in Docker directly
-# But install production deps only
-
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* ./
 COPY apps/api/package.json ./apps/api/
 COPY packages/ ./packages/
 
-RUN pnpm install --frozen-lockfile --prod --filter @fated/api...
+RUN apk add --no-cache --virtual .build-deps python3 make g++ && \
+    pnpm install --frozen-lockfile --prod --filter @fated/api... && \
+    apk del .build-deps
 
 # Copy built output
 COPY --from=builder /app/apps/api/dist ./apps/api/dist
