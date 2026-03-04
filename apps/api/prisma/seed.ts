@@ -424,16 +424,15 @@ async function main() {
 
   console.log('\nCreating entitlements...');
 
-  const moonboundEps = episodeRecords['moonbound'];
-  const crimsonEps = episodeRecords['crimson-covenant'];
-  const witchwoodSeriesId = seriesRecords['witchwood-coven'];
+  const boundEps = episodeRecords['bound-by-the-moon'] ?? [];
+  const fangsEps = episodeRecords['fangs-beneath-silk'] ?? [];
+  const spellboundSeriesId = seriesRecords['the-spellbound-bride'];
 
-  // luna_reader unlocked Moonbound episodes 6, 7, 8 and Crimson Covenant episode 6
   const lunaUnlocks = [
-    { episodeId: moonboundEps[5], seriesId: seriesRecords['moonbound'] },
-    { episodeId: moonboundEps[6], seriesId: seriesRecords['moonbound'] },
-    { episodeId: moonboundEps[7], seriesId: seriesRecords['moonbound'] },
-    { episodeId: crimsonEps[5], seriesId: seriesRecords['crimson-covenant'] },
+    ...(boundEps[0] ? [{ episodeId: boundEps[0], seriesId: seriesRecords['bound-by-the-moon'] }] : []),
+    ...(boundEps[1] ? [{ episodeId: boundEps[1], seriesId: seriesRecords['bound-by-the-moon'] }] : []),
+    ...(fangsEps[0] ? [{ episodeId: fangsEps[0], seriesId: seriesRecords['fangs-beneath-silk'] }] : []),
+    ...(fangsEps[1] ? [{ episodeId: fangsEps[1], seriesId: seriesRecords['fangs-beneath-silk'] }] : []),
   ];
 
   for (const unlock of lunaUnlocks) {
@@ -468,24 +467,26 @@ async function main() {
   }
   console.log('  ✓ luna_reader — 4 episode unlocks');
 
-  // elena_writes has author_access to Witchwood Coven
-  const elenaEntitlementExists = await prisma.entitlement.findFirst({
-    where: {
-      userId: elenaId,
-      type: EntitlementType.author_access,
-      seriesId: witchwoodSeriesId,
-    },
-  });
-  if (!elenaEntitlementExists) {
-    await prisma.entitlement.create({
-      data: {
+  // elena_writes has author_access to The Spellbound Bride
+  if (spellboundSeriesId) {
+    const elenaEntitlementExists = await prisma.entitlement.findFirst({
+      where: {
         userId: elenaId,
         type: EntitlementType.author_access,
-        seriesId: witchwoodSeriesId,
+        seriesId: spellboundSeriesId,
       },
     });
+    if (!elenaEntitlementExists) {
+      await prisma.entitlement.create({
+        data: {
+          userId: elenaId,
+          type: EntitlementType.author_access,
+          seriesId: spellboundSeriesId,
+        },
+      });
+    }
   }
-  console.log('  ✓ elena_writes — author_access to Witchwood Coven');
+  console.log('  ✓ elena_writes — author_access to The Spellbound Bride');
 
   // ── Wiki Pages ─────────────────────────────
 
@@ -494,7 +495,7 @@ async function main() {
   for (const sd of SERIES_DATA) {
     const seriesId = seriesRecords[sd.slug];
     const pages = wikiContent(sd.title, sd.slug);
-    const authorId = sd.slug === 'witchwood-coven' ? elenaId : darrenId;
+    const authorId = sd.slug === 'the-spellbound-bride' ? elenaId : darrenId;
 
     for (const page of pages) {
       const existingPage = await prisma.wikiPage.findUnique({
