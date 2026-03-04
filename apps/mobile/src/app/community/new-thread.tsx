@@ -11,6 +11,7 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api-client';
+import PersistentTabBar from '@/components/PersistentTabBar';
 
 export default function NewThreadScreen() {
   const { seriesId, seriesTitle } = useLocalSearchParams<{
@@ -42,6 +43,7 @@ export default function NewThreadScreen() {
   const canSubmit = title.trim().length >= 3 && body.trim().length >= 10;
 
   return (
+    <View style={{ flex: 1, backgroundColor: '#030712' }}>
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.content}
@@ -85,6 +87,8 @@ export default function NewThreadScreen() {
         </Text>
       </TouchableOpacity>
     </ScrollView>
+    <PersistentTabBar />
+    </View>
   );
 }
 

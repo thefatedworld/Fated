@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { ProductPurchase, Product, PurchaseError } from 'react-native-iap';
 import { api } from '@/lib/api-client';
 import { useUiStore } from '@/store/ui.store';
+import PersistentTabBar from '@/components/PersistentTabBar';
 
 const TOKEN_PACKS = [
   { sku: 'tokens_100', tokens: 100, price: '$0.99' },
@@ -220,6 +221,7 @@ export default function StoreScreen() {
           Tokens are non-refundable and have no cash value.
         </Text>
       </ScrollView>
+      <PersistentTabBar />
     </View>
   );
 }

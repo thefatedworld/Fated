@@ -468,7 +468,13 @@ export class ContentService {
       },
     });
     if (!episode || episode.isDeleted) throw new NotFoundException('Episode not found');
-    return episode;
+    return {
+      ...episode,
+      assets: episode.assets.map((a) => ({
+        ...a,
+        fileSizeBytes: a.fileSizeBytes?.toString() ?? null,
+      })),
+    };
   }
 
   // ── INTERNAL TASK HANDLER ────────────────────

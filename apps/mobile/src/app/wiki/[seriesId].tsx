@@ -12,6 +12,7 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { api, WikiPage } from '@/lib/api-client';
+import PersistentTabBar from '@/components/PersistentTabBar';
 
 const TAG_COLORS: Record<string, string> = {
   characters: '#3b82f6',
@@ -221,6 +222,7 @@ export default function WikiListScreen() {
           </TouchableOpacity>
         )}
       />
+      <PersistentTabBar />
     </View>
   );
 }

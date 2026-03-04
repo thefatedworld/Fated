@@ -13,6 +13,7 @@ import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { api, AuthorSeriesStats, DistributionJob } from '@/lib/api-client';
 import { useAuthStore } from '@/store/auth.store';
+import PersistentTabBar from '@/components/PersistentTabBar';
 
 const STATUS_COLORS: Record<DistributionJob['status'], string> = {
   pending: '#f59e0b',
@@ -77,6 +78,7 @@ export default function AuthorDashboardScreen() {
   const maxViews = seriesStats?.reduce((max, s) => Math.max(max, s.totalViews), 1) ?? 1;
 
   return (
+    <View style={{ flex: 1, backgroundColor: '#030712' }}>
     <ScrollView
       style={styles.container}
       contentContainerStyle={{ paddingBottom: 48 }}
@@ -156,6 +158,8 @@ export default function AuthorDashboardScreen() {
         </TouchableOpacity>
       </View>
     </ScrollView>
+    <PersistentTabBar />
+    </View>
   );
 }
 

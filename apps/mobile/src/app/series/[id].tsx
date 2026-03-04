@@ -3,6 +3,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api-client';
 import EpisodeCard from '@/components/EpisodeCard';
+import PersistentTabBar from '@/components/PersistentTabBar';
 import { analytics } from '@/lib/analytics';
 import { useEffect } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -68,7 +69,8 @@ export default function SeriesDetailScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
+    <View style={styles.container}>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 40 }}>
       {/* Cover */}
       <View style={styles.coverContainer}>
         {series.coverImageUrl ? (
@@ -159,6 +161,8 @@ export default function SeriesDetailScreen() {
         </TouchableOpacity>
       </View>
     </ScrollView>
+    <PersistentTabBar />
+  </View>
   );
 }
 

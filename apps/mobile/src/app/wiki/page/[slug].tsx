@@ -11,6 +11,7 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { api, WikiRevision } from '@/lib/api-client';
+import PersistentTabBar from '@/components/PersistentTabBar';
 
 const CATEGORY_BADGE: Record<string, { label: string; color: string }> = {
   characters: { label: 'Character', color: '#3b82f6' },
@@ -226,6 +227,7 @@ export default function WikiPageScreen() {
   const updatedAt = page.currentRevision?.createdAt;
 
   return (
+    <View style={{ flex: 1 }}>
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.content}
@@ -316,6 +318,8 @@ export default function WikiPageScreen() {
         </View>
       )}
     </ScrollView>
+    <PersistentTabBar />
+    </View>
   );
 }
 

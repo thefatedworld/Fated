@@ -117,7 +117,10 @@ export class VideoService {
       payload: { confirmed: true, versionNumber: newVersionNumber, fileSizeBytes },
     });
 
-    return updated;
+    return {
+      ...updated,
+      fileSizeBytes: updated.fileSizeBytes?.toString() ?? null,
+    };
   }
 
   /**

@@ -11,6 +11,7 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api-client';
+import PersistentTabBar from '@/components/PersistentTabBar';
 
 function timeAgo(dateStr: string) {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -135,6 +136,7 @@ export default function CommunityThreadsScreen() {
           )}
         />
       )}
+      <PersistentTabBar />
     </View>
   );
 }

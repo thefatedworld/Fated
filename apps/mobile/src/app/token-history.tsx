@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { api, type TokenLedgerEntry } from '@/lib/api-client';
+import PersistentTabBar from '@/components/PersistentTabBar';
 
 const TYPE_LABELS: Record<string, { label: string; color: string }> = {
   iap_credit: { label: 'Purchase', color: '#10b981' },
@@ -75,31 +76,34 @@ export default function TokenHistoryScreen() {
   };
 
   return (
-    <FlatList
-      style={styles.container}
-      contentContainerStyle={styles.listContent}
-      data={entries ?? []}
-      keyExtractor={(item) => item.id}
-      refreshControl={
-        <RefreshControl
-          refreshing={isRefetching}
-          onRefresh={refetch}
-          tintColor="#a855f7"
-        />
-      }
-      ListHeaderComponent={
-        <View style={styles.header}>
-          <Text style={styles.title}>Token History</Text>
-          <Text style={styles.subtitle}>Your transaction ledger</Text>
-        </View>
-      }
-      ListEmptyComponent={
-        <View style={[styles.center, { paddingVertical: 80 }]}>
-          <Text style={styles.emptyText}>No transactions yet.</Text>
-        </View>
-      }
-      renderItem={renderEntry}
-    />
+    <View style={{ flex: 1, backgroundColor: '#030712' }}>
+      <FlatList
+        style={styles.container}
+        contentContainerStyle={styles.listContent}
+        data={entries ?? []}
+        keyExtractor={(item) => item.id}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefetching}
+            onRefresh={refetch}
+            tintColor="#a855f7"
+          />
+        }
+        ListHeaderComponent={
+          <View style={styles.header}>
+            <Text style={styles.title}>Token History</Text>
+            <Text style={styles.subtitle}>Your transaction ledger</Text>
+          </View>
+        }
+        ListEmptyComponent={
+          <View style={[styles.center, { paddingVertical: 80 }]}>
+            <Text style={styles.emptyText}>No transactions yet.</Text>
+          </View>
+        }
+        renderItem={renderEntry}
+      />
+      <PersistentTabBar />
+    </View>
   );
 }
 

@@ -17,6 +17,7 @@ import { api, type Thread, type ThreadReply } from '@/lib/api-client';
 import { useAuthStore } from '@/store/auth.store';
 import ReportModal from '@/components/ReportModal';
 import ModToolbar from '@/components/ModToolbar';
+import PersistentTabBar from '@/components/PersistentTabBar';
 
 function timeAgo(dateStr: string) {
   const diff = Date.now() - new Date(dateStr).getTime();
