@@ -151,7 +151,10 @@ export class VideoService {
 
     let playbackUrl: string;
 
-    if (cdnSigningKeyB64 && cdnBase) {
+    const hasCdn = cdnSigningKeyB64 && cdnKeyName && cdnBase
+      && !cdnBase.includes('storage.googleapis.com');
+
+    if (hasCdn) {
       const signingKey = Buffer.from(cdnSigningKeyB64, 'base64');
       playbackUrl = this.gcs.generateCdnSignedUrl(
         cdnBase,
@@ -161,7 +164,6 @@ export class VideoService {
         expiresInSeconds,
       );
     } else {
-      // Fallback: direct GCS signed URL (local dev)
       playbackUrl = await this.gcs.generateDownloadSignedUrl(
         asset.gcsBucket,
         asset.gcsObjectKey,

@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { View, Image, Text, StyleSheet, Dimensions } from 'react-native';
+import { View, Image, StyleSheet, Dimensions } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StatusBar } from 'expo-status-bar';
@@ -9,7 +9,6 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
-  withSpring,
   withDelay,
   withSequence,
   runOnJS,
@@ -22,9 +21,8 @@ import '../global.css';
 SplashScreen.preventAutoHideAsync();
 initAuthClient();
 
-const { width: SCREEN_W } = Dimensions.get('window');
+const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const ICON_SIZE = SCREEN_W * 0.38;
-const RING_SIZE = ICON_SIZE * 1.6;
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -44,33 +42,32 @@ Notifications.setNotificationHandler({
 });
 
 function AnimatedSplash({ onFinish }: { onFinish: () => void }) {
-  const iconScale = useSharedValue(0.6);
   const iconOpacity = useSharedValue(0);
-  const ringScale = useSharedValue(0.3);
-  const ringOpacity = useSharedValue(0);
-  const titleOpacity = useSharedValue(0);
-  const titleTranslateY = useSharedValue(12);
+  const iconScale = useSharedValue(0.85);
+  const flareX = useSharedValue(-SCREEN_W);
+  const flareOpacity = useSharedValue(0);
   const containerOpacity = useSharedValue(1);
-  const shimmerPosition = useSharedValue(-1);
 
   useEffect(() => {
     SplashScreen.hideAsync();
 
-    iconOpacity.value = withTiming(1, { duration: 600, easing: Easing.out(Easing.cubic) });
-    iconScale.value = withSpring(1, { damping: 12, stiffness: 100 });
-
-    ringOpacity.value = withDelay(300, withSequence(
-      withTiming(0.7, { duration: 500 }),
-      withDelay(800, withTiming(0, { duration: 400 })),
+    // 0-400ms: black hold
+    // 400-1200ms: flare sweeps left to right
+    flareOpacity.value = withDelay(400, withSequence(
+      withTiming(1, { duration: 100 }),
+      withDelay(600, withTiming(0, { duration: 200 })),
     ));
-    ringScale.value = withDelay(300, withTiming(1.2, { duration: 1200, easing: Easing.out(Easing.cubic) }));
+    flareX.value = withDelay(400, withTiming(SCREEN_W, {
+      duration: 800,
+      easing: Easing.inOut(Easing.cubic),
+    }));
 
-    titleOpacity.value = withDelay(600, withTiming(1, { duration: 500 }));
-    titleTranslateY.value = withDelay(600, withSpring(0, { damping: 14, stiffness: 100 }));
+    // 500-900ms: logo fades in as flare crosses center
+    iconOpacity.value = withDelay(500, withTiming(1, { duration: 400, easing: Easing.out(Easing.cubic) }));
+    iconScale.value = withDelay(500, withTiming(1, { duration: 600, easing: Easing.out(Easing.cubic) }));
 
-    shimmerPosition.value = withDelay(400, withTiming(1, { duration: 1200, easing: Easing.inOut(Easing.quad) }));
-
-    containerOpacity.value = withDelay(2200, withTiming(0, { duration: 400 }, (finished) => {
+    // 1800-2200ms: entire container fades out
+    containerOpacity.value = withDelay(1800, withTiming(0, { duration: 400 }, (finished) => {
       if (finished) runOnJS(onFinish)();
     }));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -80,14 +77,9 @@ function AnimatedSplash({ onFinish }: { onFinish: () => void }) {
     transform: [{ scale: iconScale.value }],
   }));
 
-  const ringAnimStyle = useAnimatedStyle(() => ({
-    opacity: ringOpacity.value,
-    transform: [{ scale: ringScale.value }],
-  }));
-
-  const titleAnimStyle = useAnimatedStyle(() => ({
-    opacity: titleOpacity.value,
-    transform: [{ translateY: titleTranslateY.value }],
+  const flareAnimStyle = useAnimatedStyle(() => ({
+    opacity: flareOpacity.value,
+    transform: [{ translateX: flareX.value }],
   }));
 
   const containerAnimStyle = useAnimatedStyle(() => ({
@@ -96,19 +88,20 @@ function AnimatedSplash({ onFinish }: { onFinish: () => void }) {
 
   return (
     <Animated.View style={[splashStyles.container, containerAnimStyle]}>
-      <View style={splashStyles.centerWrap}>
-        <Animated.View style={[splashStyles.ring, ringAnimStyle]} />
-        <Animated.View style={[splashStyles.iconWrap, iconAnimStyle]}>
-          <Image
-            source={require('../../assets/icon.png')}
-            style={splashStyles.icon}
-            resizeMode="contain"
-          />
-        </Animated.View>
-      </View>
-      <Animated.View style={titleAnimStyle}>
-        <Text style={splashStyles.title}>FATEDWORLD</Text>
-        <View style={splashStyles.subtitleLine} />
+      {/* Logo */}
+      <Animated.View style={[splashStyles.iconWrap, iconAnimStyle]}>
+        <Image
+          source={require('../../assets/icon.png')}
+          style={splashStyles.icon}
+          resizeMode="contain"
+        />
+      </Animated.View>
+
+      {/* Lens flare / screen wipe */}
+      <Animated.View style={[splashStyles.flare, flareAnimStyle]}>
+        <View style={splashStyles.flareCore} />
+        <View style={splashStyles.flareGlowInner} />
+        <View style={splashStyles.flareGlowOuter} />
       </Animated.View>
     </Animated.View>
   );
@@ -148,60 +141,45 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 const splashStyles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#030712',
+    backgroundColor: '#000000',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  centerWrap: {
-    width: RING_SIZE,
-    height: RING_SIZE,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 24,
-  },
-  ring: {
-    position: 'absolute',
-    width: RING_SIZE,
-    height: RING_SIZE,
-    borderRadius: RING_SIZE / 2,
-    borderWidth: 1.5,
-    borderColor: 'rgba(212,175,55,0.5)',
-    shadowColor: '#d4af37',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 20,
   },
   iconWrap: {
     width: ICON_SIZE,
     height: ICON_SIZE,
     borderRadius: ICON_SIZE * 0.22,
     overflow: 'hidden',
-    shadowColor: '#d4af37',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.4,
-    shadowRadius: 30,
-    elevation: 10,
   },
   icon: {
     width: '100%',
     height: '100%',
   },
-  title: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: '#d4af37',
-    letterSpacing: 8,
-    textAlign: 'center',
-    textShadowColor: 'rgba(212,175,55,0.4)',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 12,
-  },
-  subtitleLine: {
+  flare: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
     width: 60,
-    height: 1,
-    backgroundColor: 'rgba(212,175,55,0.3)',
-    alignSelf: 'center',
-    marginTop: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  flareCore: {
+    position: 'absolute',
+    width: 3,
+    height: SCREEN_H,
+    backgroundColor: 'rgba(255,255,255,0.9)',
+  },
+  flareGlowInner: {
+    position: 'absolute',
+    width: 30,
+    height: SCREEN_H,
+    backgroundColor: 'rgba(212,175,55,0.25)',
+  },
+  flareGlowOuter: {
+    position: 'absolute',
+    width: 60,
+    height: SCREEN_H,
+    backgroundColor: 'rgba(212,175,55,0.08)',
   },
 });
 
