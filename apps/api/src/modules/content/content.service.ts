@@ -12,6 +12,7 @@ import { CloudTasksService } from '../../infrastructure/cloudtasks/cloudtasks.se
 import { PubSubService } from '../../infrastructure/pubsub/pubsub.service';
 import { CreateSeriesDto } from './dto/create-series.dto';
 import { CreateEpisodeDto } from './dto/create-episode.dto';
+import { UpdateEpisodeDto } from './dto/update-episode.dto';
 import { AuditAction, EpisodeStatus, SeriesStatus } from '@prisma/client';
 
 function generateSlug(title: string): string {
@@ -241,6 +242,39 @@ export class ContentService {
     return episode;
   }
 
+  async updateEpisode(
+    episodeId: string,
+    dto: UpdateEpisodeDto,
+    actorId: string,
+    actorRole: string,
+  ) {
+    const episode = await this.prisma.episode.findUnique({ where: { id: episodeId } });
+    if (!episode || episode.isDeleted) throw new NotFoundException('Episode not found');
+
+    const updated = await this.prisma.episode.update({
+      where: { id: episodeId },
+      data: {
+        ...(dto.title !== undefined && { title: dto.title }),
+        ...(dto.description !== undefined && { description: dto.description }),
+        ...(dto.isGated !== undefined && { isGated: dto.isGated }),
+        ...(dto.tokenCost !== undefined && { tokenCost: dto.tokenCost }),
+        ...(dto.durationSeconds !== undefined && { durationSeconds: dto.durationSeconds }),
+        ...(dto.sortOrder !== undefined && { sortOrder: dto.sortOrder }),
+      },
+    });
+
+    await this.audit.log({
+      actorId,
+      actorRole,
+      action: AuditAction.episode_update,
+      targetType: 'episode',
+      targetId: episodeId,
+      payload: dto as Record<string, unknown>,
+    });
+
+    return updated;
+  }
+
   async publishEpisode(episodeId: string, actorId: string, actorRole: string) {
     const episode = await this.prisma.episode.findUnique({ where: { id: episodeId } });
     if (!episode || episode.isDeleted) throw new NotFoundException('Episode not found');
@@ -356,6 +390,47 @@ export class ContentService {
       targetType: 'episode',
       targetId: episodeId,
     });
+  }
+
+  async listSeasons(seriesId: string) {
+    return this.prisma.season.findMany({
+      where: { seriesId },
+      orderBy: { number: 'asc' },
+    });
+  }
+
+  async createSeason(
+    seriesId: string,
+    data: { title: string; number: number; arcLabel?: string },
+    actorId: string,
+    actorRole: string,
+  ) {
+    const series = await this.prisma.series.findUnique({
+      where: { id: seriesId },
+    });
+    if (!series) throw new Error('Series not found');
+
+    const maxSort = await this.prisma.season.count({ where: { seriesId } });
+
+    const season = await this.prisma.season.create({
+      data: {
+        seriesId,
+        number: data.number,
+        title: data.title,
+        arcLabel: data.arcLabel ?? `Season ${data.number}`,
+        sortOrder: maxSort,
+      },
+    });
+
+    await this.audit.log({
+      actorId,
+      actorRole,
+      action: AuditAction.series_update,
+      targetType: 'season',
+      targetId: season.id,
+    });
+
+    return season;
   }
 
   async listEpisodes(seriesId: string, includeUnpublished = false) {

@@ -147,6 +147,21 @@ export default function ProfileScreen() {
         </View>
       </View>
 
+      {/* Token History */}
+      <View style={styles.section}>
+        <Text style={styles.sectionLabel}>Tokens</Text>
+        <View style={styles.card}>
+          <TouchableOpacity
+            onPress={() => router.push('/token-history')}
+            style={styles.actionRow}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.actionText}>Transaction History</Text>
+            <Text style={styles.chevron}>›</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
       {/* Account actions */}
       <View style={styles.section}>
         <Text style={styles.sectionLabel}>Account</Text>

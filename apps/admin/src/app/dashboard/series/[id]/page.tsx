@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { adminApi, Series, Episode } from '@/lib/api-client';
+import { adminApi, Series, Episode, Season, UpdateEpisodeInput } from '@/lib/api-client';
 import { getToken } from '@/lib/utils';
 
 export default function SeriesDetailPage() {
@@ -22,6 +22,27 @@ export default function SeriesDetailPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [activeUploadEpisodeId, setActiveUploadEpisodeId] = useState<string | null>(null);
 
+  // Episode edit state
+  const [editingEpisode, setEditingEpisode] = useState<Episode | null>(null);
+  const [editEpisodeData, setEditEpisodeData] = useState<UpdateEpisodeInput>({});
+
+  // Series edit state
+  const [showEditSeries, setShowEditSeries] = useState(false);
+  const [editSeriesData, setEditSeriesData] = useState({
+    title: '',
+    description: '',
+    genreTags: '',
+    coverImageUrl: '',
+  });
+
+  // Delete confirmation state
+  const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'series' | 'episode'; id: string; title: string } | null>(null);
+
+  // Seasons state
+  const [seasons, setSeasons] = useState<Season[]>([]);
+  const [showCreateSeason, setShowCreateSeason] = useState(false);
+  const [newSeason, setNewSeason] = useState({ title: '', number: 1, arcLabel: '' });
+
   const [newEpisode, setNewEpisode] = useState({
     title: '',
     description: '',
@@ -39,6 +60,10 @@ export default function SeriesDetailPage() {
       ]);
       setSeries(s);
       setEpisodes(eps);
+      try {
+        const seasonsData = await adminApi.listSeasons(token, id);
+        setSeasons(seasonsData);
+      } catch { /* seasons endpoint may not exist yet */ }
     } catch {
       router.push('/login');
     } finally {
@@ -47,6 +72,23 @@ export default function SeriesDetailPage() {
   }
 
   useEffect(() => { load(); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function handleCreateSeason(e: React.FormEvent) {
+    e.preventDefault();
+    setError('');
+    try {
+      const season = await adminApi.createSeason(getToken()!, id, {
+        title: newSeason.title,
+        number: newSeason.number,
+        arcLabel: newSeason.arcLabel || undefined,
+      });
+      setSeasons((prev) => [...prev, season]);
+      setNewSeason({ title: '', number: seasons.length + 2, arcLabel: '' });
+      setShowCreateSeason(false);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to create season');
+    }
+  }
 
   async function handleCreateEpisode(e: React.FormEvent) {
     e.preventDefault();
@@ -90,6 +132,80 @@ export default function SeriesDetailPage() {
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to publish series');
     }
+  }
+
+  async function handleUpdateEpisode() {
+    if (!editingEpisode) return;
+    setError('');
+    try {
+      const updated = await adminApi.updateEpisode(getToken()!, editingEpisode.id, editEpisodeData);
+      setEpisodes((prev) => prev.map((ep) => ep.id === editingEpisode.id ? updated : ep));
+      setEditingEpisode(null);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to update episode');
+    }
+  }
+
+  async function handleDeleteConfirm() {
+    if (!deleteConfirm) return;
+    setError('');
+    try {
+      if (deleteConfirm.type === 'episode') {
+        await adminApi.deleteEpisode(getToken()!, deleteConfirm.id);
+        setEpisodes((prev) => prev.filter((ep) => ep.id !== deleteConfirm.id));
+      } else {
+        await adminApi.deleteSeries(getToken()!, deleteConfirm.id);
+        router.push('/dashboard/series');
+        return;
+      }
+      setDeleteConfirm(null);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to delete');
+    }
+  }
+
+  async function handleUpdateSeries(e: React.FormEvent) {
+    e.preventDefault();
+    if (!series) return;
+    setError('');
+    try {
+      const payload: Record<string, unknown> = {};
+      if (editSeriesData.title && editSeriesData.title !== series.title) payload.title = editSeriesData.title;
+      if (editSeriesData.description !== (series.description ?? '')) payload.description = editSeriesData.description;
+      if (editSeriesData.coverImageUrl !== (series.coverImageUrl ?? '')) payload.coverImageUrl = editSeriesData.coverImageUrl;
+      const tags = editSeriesData.genreTags.split(',').map((t) => t.trim()).filter(Boolean);
+      const currentTags = series.genreTags?.join(', ') ?? '';
+      if (editSeriesData.genreTags !== currentTags) payload.genreTags = tags;
+
+      if (Object.keys(payload).length > 0) {
+        const updated = await adminApi.updateSeries(getToken()!, series.id, payload as Partial<{ title: string; description: string; genreTags: string[]; coverImageUrl: string }>);
+        setSeries(updated);
+      }
+      setShowEditSeries(false);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to update series');
+    }
+  }
+
+  function openEditEpisode(ep: Episode) {
+    setEditingEpisode(ep);
+    setEditEpisodeData({
+      title: ep.title,
+      description: ep.description ?? '',
+      isGated: ep.isGated,
+      tokenCost: ep.tokenCost,
+    });
+  }
+
+  function openEditSeries() {
+    if (!series) return;
+    setEditSeriesData({
+      title: series.title,
+      description: series.description ?? '',
+      genreTags: series.genreTags?.join(', ') ?? '',
+      coverImageUrl: series.coverImageUrl ?? '',
+    });
+    setShowEditSeries(true);
   }
 
   function handleUploadClick(episodeId: string) {
@@ -171,7 +287,7 @@ export default function SeriesDetailPage() {
 
       {/* Series header */}
       <div className="flex items-start justify-between mb-8">
-        <div>
+        <div className="flex-1 min-w-0">
           <h1 className="text-2xl font-bold text-white">{series?.title}</h1>
           <div className="flex items-center gap-3 mt-2">
             {series && statusBadge(series.status, series.isDeleted)}
@@ -188,14 +304,28 @@ export default function SeriesDetailPage() {
             </div>
           )}
         </div>
-        {series?.status === 'draft' && (
+        <div className="flex items-center gap-2">
           <button
-            onClick={handlePublishSeries}
-            className="px-4 py-2 bg-green-600 hover:bg-green-500 rounded-lg text-sm font-medium text-white transition-colors"
+            onClick={openEditSeries}
+            className="px-3 py-2 text-xs rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 transition-colors"
           >
-            Publish Series
+            Edit Series
           </button>
-        )}
+          {series?.status === 'draft' && (
+            <button
+              onClick={handlePublishSeries}
+              className="px-4 py-2 bg-green-600 hover:bg-green-500 rounded-lg text-sm font-medium text-white transition-colors"
+            >
+              Publish Series
+            </button>
+          )}
+          <button
+            onClick={() => series && setDeleteConfirm({ type: 'series', id: series.id, title: series.title })}
+            className="px-3 py-2 text-xs rounded-lg bg-red-600/10 hover:bg-red-600/20 text-red-400 transition-colors"
+          >
+            Delete
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -203,6 +333,83 @@ export default function SeriesDetailPage() {
           {error}
         </div>
       )}
+
+      {/* Seasons */}
+      <div className="mb-8">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-lg font-semibold text-white">Seasons ({seasons.length})</h2>
+          <button
+            onClick={() => { setShowCreateSeason(!showCreateSeason); setNewSeason({ title: '', number: seasons.length + 1, arcLabel: '' }); }}
+            className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 rounded-lg text-xs font-medium text-gray-300 transition-colors"
+          >
+            {showCreateSeason ? 'Cancel' : '+ Add Season'}
+          </button>
+        </div>
+
+        {showCreateSeason && (
+          <form onSubmit={handleCreateSeason} className="bg-gray-900/50 border border-gray-800/60 rounded-xl p-5 mb-4">
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="block text-xs text-gray-400 mb-1.5">Season Number</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={newSeason.number}
+                  onChange={(e) => setNewSeason({ ...newSeason, number: parseInt(e.target.value) || 1 })}
+                  className="w-full bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1.5">Title *</label>
+                <input
+                  required
+                  value={newSeason.title}
+                  onChange={(e) => setNewSeason({ ...newSeason, title: e.target.value })}
+                  className="w-full bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+                  placeholder="Season 2: The Awakening"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1.5">Arc Label</label>
+                <input
+                  value={newSeason.arcLabel}
+                  onChange={(e) => setNewSeason({ ...newSeason, arcLabel: e.target.value })}
+                  className="w-full bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+                  placeholder="Season 2"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end mt-3">
+              <button type="submit" className="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded-lg text-sm font-medium text-white transition-colors">
+                Create Season
+              </button>
+            </div>
+          </form>
+        )}
+
+        {seasons.length > 0 && (
+          <div className="grid grid-cols-2 gap-3">
+            {seasons.sort((a, b) => a.number - b.number).map((s) => (
+              <div key={s.id} className="bg-gray-900/50 border border-gray-800/60 rounded-xl px-4 py-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-xs text-purple-400 font-medium">Season {s.number}</span>
+                    <p className="text-sm font-medium text-white mt-0.5">{s.title}</p>
+                    {s.arcLabel && <p className="text-xs text-gray-500">{s.arcLabel}</p>}
+                  </div>
+                  <span className="text-xs text-gray-600">
+                    {episodes.filter((ep) => (ep as Episode & { seasonId?: string }).seasonId === s.id).length} episodes
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {seasons.length === 0 && !showCreateSeason && (
+          <p className="text-sm text-gray-600">No seasons defined yet. Episodes are organized by season.</p>
+        )}
+      </div>
 
       {/* Episodes */}
       <div className="flex items-center justify-between mb-4">
@@ -309,6 +516,12 @@ export default function SeriesDetailPage() {
                   <td className="px-5 py-4">
                     <div className="flex items-center gap-1.5">
                       <button
+                        onClick={() => openEditEpisode(ep)}
+                        className="px-2.5 py-1 text-xs rounded-md bg-gray-800 hover:bg-gray-700 text-gray-300 transition-colors"
+                      >
+                        Edit
+                      </button>
+                      <button
                         onClick={() => handleUploadClick(ep.id)}
                         disabled={uploading === ep.id}
                         className="px-2.5 py-1 text-xs rounded-md bg-gray-800 hover:bg-gray-700 text-gray-300 transition-colors disabled:opacity-50"
@@ -329,6 +542,14 @@ export default function SeriesDetailPage() {
                           className="px-2.5 py-1 text-xs rounded-md bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 transition-colors"
                         >
                           Schedule
+                        </button>
+                      )}
+                      {!ep.isDeleted && (
+                        <button
+                          onClick={() => setDeleteConfirm({ type: 'episode', id: ep.id, title: ep.title })}
+                          className="px-2.5 py-1 text-xs rounded-md bg-red-600/10 hover:bg-red-600/20 text-red-400 transition-colors"
+                        >
+                          Delete
                         </button>
                       )}
                     </div>
@@ -364,6 +585,148 @@ export default function SeriesDetailPage() {
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium text-white transition-colors disabled:opacity-50"
               >
                 Schedule
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Episode modal */}
+      {editingEpisode && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 w-full max-w-md shadow-xl">
+            <h3 className="text-base font-semibold text-white mb-4">Edit Episode #{editingEpisode.number}</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs text-gray-400 mb-1.5">Title</label>
+                <input
+                  value={editEpisodeData.title ?? ''}
+                  onChange={(e) => setEditEpisodeData({ ...editEpisodeData, title: e.target.value })}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1.5">Description</label>
+                <textarea
+                  value={editEpisodeData.description ?? ''}
+                  onChange={(e) => setEditEpisodeData({ ...editEpisodeData, description: e.target.value })}
+                  rows={3}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex items-center gap-2">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={editEpisodeData.isGated ?? false}
+                      onChange={(e) => setEditEpisodeData({ ...editEpisodeData, isGated: e.target.checked })}
+                      className="w-4 h-4 accent-purple-600 rounded"
+                    />
+                    <span className="text-sm text-gray-300">Token-gated</span>
+                  </label>
+                </div>
+                {editEpisodeData.isGated && (
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1.5">Token Cost</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={editEpisodeData.tokenCost ?? 0}
+                      onChange={(e) => setEditEpisodeData({ ...editEpisodeData, tokenCost: parseInt(e.target.value) || 0 })}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button onClick={() => setEditingEpisode(null)} className="px-4 py-2 text-sm text-gray-500 hover:text-white transition-colors">
+                Cancel
+              </button>
+              <button
+                onClick={handleUpdateEpisode}
+                className="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded-lg text-sm font-medium text-white transition-colors"
+              >
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Series modal */}
+      {showEditSeries && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 w-full max-w-lg shadow-xl">
+            <h3 className="text-base font-semibold text-white mb-4">Edit Series</h3>
+            <form onSubmit={handleUpdateSeries} className="space-y-4">
+              <div>
+                <label className="block text-xs text-gray-400 mb-1.5">Title</label>
+                <input
+                  value={editSeriesData.title}
+                  onChange={(e) => setEditSeriesData({ ...editSeriesData, title: e.target.value })}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1.5">Description</label>
+                <textarea
+                  value={editSeriesData.description}
+                  onChange={(e) => setEditSeriesData({ ...editSeriesData, description: e.target.value })}
+                  rows={4}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1.5">Genre Tags (comma-separated)</label>
+                <input
+                  value={editSeriesData.genreTags}
+                  onChange={(e) => setEditSeriesData({ ...editSeriesData, genreTags: e.target.value })}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+                  placeholder="romantasy, enemies-to-lovers"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1.5">Cover Image URL</label>
+                <input
+                  value={editSeriesData.coverImageUrl}
+                  onChange={(e) => setEditSeriesData({ ...editSeriesData, coverImageUrl: e.target.value })}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+                  placeholder="https://..."
+                />
+              </div>
+              <div className="flex justify-end gap-3 mt-2">
+                <button type="button" onClick={() => setShowEditSeries(false)} className="px-4 py-2 text-sm text-gray-500 hover:text-white transition-colors">
+                  Cancel
+                </button>
+                <button type="submit" className="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded-lg text-sm font-medium text-white transition-colors">
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirmation modal */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 w-full max-w-sm shadow-xl">
+            <h3 className="text-base font-semibold text-white mb-2">Confirm Delete</h3>
+            <p className="text-sm text-gray-400 mb-6">
+              Are you sure you want to delete <strong className="text-white">{deleteConfirm.title}</strong>?
+              {deleteConfirm.type === 'series' && ' This will also remove all its episodes.'}
+            </p>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setDeleteConfirm(null)} className="px-4 py-2 text-sm text-gray-500 hover:text-white transition-colors">
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteConfirm}
+                className="px-4 py-2 bg-red-600 hover:bg-red-500 rounded-lg text-sm font-medium text-white transition-colors"
+              >
+                Delete
               </button>
             </div>
           </div>

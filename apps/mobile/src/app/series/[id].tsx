@@ -94,12 +94,28 @@ export default function SeriesDetailScreen() {
         )}
       </View>
 
-      {/* Community link */}
-      <View style={{ paddingHorizontal: 16, marginTop: 16 }}>
-        <TouchableOpacity style={styles.communityLink} activeOpacity={0.8}>
+      {/* Community & Wiki links */}
+      <View style={{ paddingHorizontal: 16, marginTop: 16, gap: 10 }}>
+        <TouchableOpacity
+          style={styles.communityLink}
+          activeOpacity={0.8}
+          onPress={() => router.push({ pathname: '/community/[seriesId]', params: { seriesId: id, seriesTitle: series.title } })}
+        >
           <View>
             <Text style={styles.communityTitle}>Community</Text>
             <Text style={styles.communitySub}>Discuss this series</Text>
+          </View>
+          <Text style={styles.chevron}>›</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.communityLink}
+          activeOpacity={0.8}
+          onPress={() => router.push({ pathname: '/wiki/[seriesId]', params: { seriesId: id, seriesTitle: series.title } })}
+        >
+          <View>
+            <Text style={styles.communityTitle}>Wiki & Lore</Text>
+            <Text style={styles.communitySub}>Characters, world, theories</Text>
           </View>
           <Text style={styles.chevron}>›</Text>
         </TouchableOpacity>

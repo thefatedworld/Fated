@@ -13,6 +13,7 @@ interface QueueItem {
   reporter?: { username: string };
   page?: { title: string; slug: string };
   author?: { username: string };
+  body?: string;
 }
 
 export default function ModerationPage() {
@@ -21,6 +22,10 @@ export default function ModerationPage() {
   const [wikiQueue, setWikiQueue] = useState<QueueItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'reports' | 'wiki'>('reports');
+  const [error, setError] = useState('');
+  const [rejectModal, setRejectModal] = useState<string | null>(null);
+  const [rejectNote, setRejectNote] = useState('');
+  const [actionInProgress, setActionInProgress] = useState<string | null>(null);
 
   useEffect(() => {
     const token = getToken();
@@ -38,12 +43,47 @@ export default function ModerationPage() {
       .finally(() => setLoading(false));
   }, [router]);
 
+  async function handleApproveWiki(revisionId: string) {
+    setError('');
+    setActionInProgress(revisionId);
+    try {
+      await adminApi.approveWiki(getToken()!, revisionId);
+      setWikiQueue((prev) => prev.filter((item) => item.id !== revisionId));
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to approve revision');
+    } finally {
+      setActionInProgress(null);
+    }
+  }
+
+  async function handleRejectWiki() {
+    if (!rejectModal) return;
+    setError('');
+    setActionInProgress(rejectModal);
+    try {
+      await adminApi.rejectWiki(getToken()!, rejectModal, rejectNote);
+      setWikiQueue((prev) => prev.filter((item) => item.id !== rejectModal));
+      setRejectModal(null);
+      setRejectNote('');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to reject revision');
+    } finally {
+      setActionInProgress(null);
+    }
+  }
+
   return (
     <div>
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-white">Moderation</h1>
         <p className="text-gray-500 text-sm mt-1">Review reports and wiki submissions</p>
       </div>
+
+      {error && (
+        <div className="mb-4 px-4 py-3 bg-red-950/30 border border-red-900/40 rounded-xl text-red-400 text-sm">
+          {error}
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-2 mb-6">
@@ -107,6 +147,7 @@ export default function ModerationPage() {
                     <th className="px-5 py-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Page</th>
                     <th className="px-5 py-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Author</th>
                     <th className="px-5 py-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Date</th>
+                    <th className="px-5 py-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-800/60">
@@ -115,12 +156,61 @@ export default function ModerationPage() {
                       <td className="px-5 py-4 text-sm text-white">{r.page?.title}</td>
                       <td className="px-5 py-4 text-sm text-gray-400">{r.author?.username}</td>
                       <td className="px-5 py-4 text-sm text-gray-500">{new Date(r.createdAt).toLocaleDateString()}</td>
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => handleApproveWiki(r.id)}
+                            disabled={actionInProgress === r.id}
+                            className="px-2.5 py-1 text-xs rounded-md bg-green-600/10 hover:bg-green-600/20 text-green-400 transition-colors disabled:opacity-50"
+                          >
+                            Approve
+                          </button>
+                          <button
+                            onClick={() => { setRejectModal(r.id); setRejectNote(''); }}
+                            disabled={actionInProgress === r.id}
+                            className="px-2.5 py-1 text-xs rounded-md bg-red-600/10 hover:bg-red-600/20 text-red-400 transition-colors disabled:opacity-50"
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             )
           )}
+        </div>
+      )}
+
+      {/* Reject Wiki modal */}
+      {rejectModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 w-full max-w-sm shadow-xl">
+            <h3 className="text-base font-semibold text-white mb-4">Reject Wiki Revision</h3>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1.5">Review Note</label>
+              <textarea
+                value={rejectNote}
+                onChange={(e) => setRejectNote(e.target.value)}
+                rows={3}
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+                placeholder="Reason for rejection..."
+              />
+            </div>
+            <div className="flex justify-end gap-3 mt-4">
+              <button onClick={() => setRejectModal(null)} className="px-4 py-2 text-sm text-gray-500 hover:text-white transition-colors">
+                Cancel
+              </button>
+              <button
+                onClick={handleRejectWiki}
+                disabled={!rejectNote.trim()}
+                className="px-4 py-2 bg-red-600 hover:bg-red-500 rounded-lg text-sm font-medium text-white transition-colors disabled:opacity-50"
+              >
+                Reject
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

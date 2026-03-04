@@ -15,6 +15,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger'
 import { ContentService } from './content.service';
 import { CreateSeriesDto } from './dto/create-series.dto';
 import { CreateEpisodeDto } from './dto/create-episode.dto';
+import { UpdateEpisodeDto } from './dto/update-episode.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -91,6 +92,26 @@ export class ContentController {
     return this.contentService.restoreSeries(id, user.id, user.role);
   }
 
+  // ── SEASONS ──
+
+  @Public()
+  @Get('series/:seriesId/seasons')
+  @ApiOperation({ summary: 'List seasons for a series' })
+  listSeasons(@Param('seriesId') seriesId: string) {
+    return this.contentService.listSeasons(seriesId);
+  }
+
+  @Post('admin/series/:seriesId/seasons')
+  @Roles(UserRole.content_admin, UserRole.superadmin)
+  @ApiOperation({ summary: '[Admin] Create season' })
+  createSeason(
+    @Param('seriesId') seriesId: string,
+    @Body() body: { title: string; number: number; arcLabel?: string },
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.contentService.createSeason(seriesId, body, user.id, user.role);
+  }
+
   // ── EPISODES (public reads, admin writes) ──
 
   @Public()
@@ -123,6 +144,17 @@ export class ContentController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.contentService.createEpisode(seriesId, dto, user.id, user.role);
+  }
+
+  @Patch('admin/episodes/:id')
+  @Roles(UserRole.content_admin, UserRole.superadmin)
+  @ApiOperation({ summary: '[Admin] Update episode' })
+  updateEpisode(
+    @Param('id') id: string,
+    @Body() dto: UpdateEpisodeDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.contentService.updateEpisode(id, dto, user.id, user.role);
   }
 
   @Post('admin/episodes/:id/publish')

@@ -6,6 +6,14 @@ import { adminApi, AdminUser } from '@/lib/api-client';
 import { getToken } from '@/lib/utils';
 
 const ROLES = ['user', 'approved_member', 'moderator', 'author', 'content_admin', 'analytics_admin', 'superadmin'];
+const TIMEOUT_DURATIONS = [
+  { label: '1 hour', secs: 3600 },
+  { label: '12 hours', secs: 43200 },
+  { label: '1 day', secs: 86400 },
+  { label: '3 days', secs: 259200 },
+  { label: '7 days', secs: 604800 },
+  { label: '30 days', secs: 2592000 },
+];
 
 export default function UsersPage() {
   const router = useRouter();
@@ -17,6 +25,9 @@ export default function UsersPage() {
   const [roleModal, setRoleModal] = useState<AdminUser | null>(null);
   const [selectedRole, setSelectedRole] = useState('');
   const [filterBanned, setFilterBanned] = useState(false);
+  const [timeoutModal, setTimeoutModal] = useState<AdminUser | null>(null);
+  const [timeoutReason, setTimeoutReason] = useState('');
+  const [timeoutDuration, setTimeoutDuration] = useState(86400);
 
   async function load(banned?: boolean) {
     const token = getToken();
@@ -75,6 +86,20 @@ export default function UsersPage() {
       setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, isVerifiedAuthor: true, role: 'author' } : u));
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to verify author');
+    }
+  }
+
+  async function handleTimeout() {
+    if (!timeoutModal) return;
+    setError('');
+    try {
+      await adminApi.timeoutUser(getToken()!, timeoutModal.id, timeoutReason, timeoutDuration);
+      const expiresAt = new Date(Date.now() + timeoutDuration * 1000).toISOString();
+      setUsers((prev) => prev.map((u) => u.id === timeoutModal.id ? { ...u, isBanned: true, banExpiresAt: expiresAt } : u));
+      setTimeoutModal(null);
+      setTimeoutReason('');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to timeout user');
     }
   }
 
@@ -182,12 +207,20 @@ export default function UsersPage() {
                             Unban
                           </button>
                         ) : (
-                          <button
-                            onClick={() => { setBanModal(user); setBanReason(''); }}
-                            className="px-2.5 py-1 text-xs rounded-md bg-red-600/10 hover:bg-red-600/20 text-red-400 transition-colors"
-                          >
-                            Ban
-                          </button>
+                          <>
+                            <button
+                              onClick={() => { setTimeoutModal(user); setTimeoutReason(''); setTimeoutDuration(86400); }}
+                              className="px-2.5 py-1 text-xs rounded-md bg-yellow-600/10 hover:bg-yellow-600/20 text-yellow-400 transition-colors"
+                            >
+                              Timeout
+                            </button>
+                            <button
+                              onClick={() => { setBanModal(user); setBanReason(''); }}
+                              className="px-2.5 py-1 text-xs rounded-md bg-red-600/10 hover:bg-red-600/20 text-red-400 transition-colors"
+                            >
+                              Ban
+                            </button>
+                          </>
                         )}
                       </div>
                     </td>
@@ -253,6 +286,45 @@ export default function UsersPage() {
                 className="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded-lg text-sm font-medium text-white transition-colors"
               >
                 Update
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Timeout modal */}
+      {timeoutModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 w-full max-w-sm shadow-xl">
+            <h3 className="text-base font-semibold text-white mb-1">Timeout User</h3>
+            <p className="text-sm text-gray-400 mb-4">{timeoutModal.username}</p>
+            <label className="block text-xs text-gray-400 mb-1.5">Duration</label>
+            <select
+              value={timeoutDuration}
+              onChange={(e) => setTimeoutDuration(parseInt(e.target.value))}
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500/40 mb-4"
+            >
+              {TIMEOUT_DURATIONS.map((d) => (
+                <option key={d.secs} value={d.secs}>{d.label}</option>
+              ))}
+            </select>
+            <label className="block text-xs text-gray-400 mb-1.5">Reason *</label>
+            <input
+              value={timeoutReason}
+              onChange={(e) => setTimeoutReason(e.target.value)}
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500/40 mb-4"
+              placeholder="Timeout reason"
+            />
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setTimeoutModal(null)} className="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors">
+                Cancel
+              </button>
+              <button
+                onClick={handleTimeout}
+                disabled={!timeoutReason}
+                className="px-4 py-2 bg-yellow-600 hover:bg-yellow-500 rounded-lg text-sm font-medium text-white transition-colors disabled:opacity-50"
+              >
+                Apply Timeout
               </button>
             </div>
           </div>

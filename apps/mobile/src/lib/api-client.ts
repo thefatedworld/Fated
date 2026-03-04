@@ -146,6 +146,42 @@ export interface NotificationPreferences {
   promotions: boolean;
 }
 
+export interface TokenLedgerEntry {
+  id: string;
+  amount: number;
+  balanceAfter: number;
+  type: string;
+  referenceId?: string;
+  createdAt: string;
+}
+
+export interface WikiPage {
+  id: string;
+  slug: string;
+  title: string;
+  seriesId?: string;
+  taxonomyPath?: string;
+  tags: string[];
+  isPublished: boolean;
+  currentRevId?: string;
+  currentRevision?: {
+    id: string;
+    body: string;
+    versionNum: number;
+    authorId: string;
+    createdAt: string;
+  };
+}
+
+export interface Entitlement {
+  id: string;
+  userId: string;
+  type: string;
+  seriesId?: string;
+  episodeId?: string;
+  createdAt: string;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // API methods
 // ─────────────────────────────────────────────────────────────────────────────
@@ -271,6 +307,30 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ eventType, properties }),
     }),
+
+  // Token history
+  getTokenHistory: (cursor?: string, limit?: number) => {
+    const params = new URLSearchParams();
+    if (cursor) params.set('cursor', cursor);
+    if (limit) params.set('limit', String(limit));
+    const qs = params.toString();
+    return apiFetch<TokenLedgerEntry[]>(`/v1/tokens/history${qs ? `?${qs}` : ''}`);
+  },
+
+  // Wiki
+  listWikiPages: (seriesId: string) =>
+    apiFetch<WikiPage[]>(`/v1/wiki?seriesId=${seriesId}`),
+
+  getWikiPage: (slug: string) =>
+    apiFetch<WikiPage>(`/v1/wiki/${slug}`),
+
+  // Entitlements (list)
+  getMyEntitlements: () =>
+    apiFetch<Entitlement[]>('/v1/entitlements'),
+
+  // Search (uses series list with filter on client side — or a query param if API supports it)
+  searchSeries: (query: string) =>
+    apiFetch<Series[]>(`/v1/series?search=${encodeURIComponent(query)}`),
 
   // Compliance
   requestDataExport: () =>

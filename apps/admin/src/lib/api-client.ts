@@ -58,6 +58,8 @@ export const adminApi = {
     apiFetch<Episode>(`/v1/admin/episodes/${id}/publish`, { method: 'POST', token }),
   scheduleEpisode: (token: string, id: string, scheduledAt: string) =>
     apiFetch<Episode>(`/v1/admin/episodes/${id}/schedule`, { method: 'POST', body: JSON.stringify({ scheduledAt }), token }),
+  updateEpisode: (token: string, id: string, data: UpdateEpisodeInput) =>
+    apiFetch<Episode>(`/v1/admin/episodes/${id}`, { method: 'PATCH', body: JSON.stringify(data), token }),
   deleteEpisode: (token: string, id: string) =>
     apiFetch<void>(`/v1/admin/episodes/${id}`, { method: 'DELETE', token }),
   restoreEpisode: (token: string, id: string) =>
@@ -84,9 +86,11 @@ export const adminApi = {
   unbanUser: (token: string, userId: string) =>
     apiFetch(`/v1/admin/moderation/users/${userId}/unban`, { method: 'POST', token }),
   approveWiki: (token: string, revisionId: string) =>
-    apiFetch(`/v1/admin/wiki/revisions/${revisionId}/approve`, { method: 'POST', token }),
-  rejectWiki: (token: string, revisionId: string, reason: string) =>
-    apiFetch(`/v1/admin/wiki/revisions/${revisionId}/reject`, { method: 'POST', body: JSON.stringify({ reason }), token }),
+    apiFetch(`/v1/wiki/revisions/${revisionId}/approve`, { method: 'POST', token }),
+  rejectWiki: (token: string, revisionId: string, reviewNote: string) =>
+    apiFetch(`/v1/wiki/revisions/${revisionId}/reject`, { method: 'POST', body: JSON.stringify({ reviewNote }), token }),
+  timeoutUser: (token: string, userId: string, reason: string, durationSecs: number) =>
+    apiFetch(`/v1/admin/moderation/users/${userId}/timeout`, { method: 'POST', body: JSON.stringify({ reason, durationSecs }), token }),
 
   // Analytics
   getPlatformSnapshot: (token: string, days?: number) =>
@@ -107,6 +111,26 @@ export const adminApi = {
     apiFetch(`/v1/admin/users/${userId}/role`, { method: 'PATCH', body: JSON.stringify({ role }), token }),
   verifyAuthor: (token: string, userId: string) =>
     apiFetch(`/v1/admin/users/${userId}/verify-author`, { method: 'PATCH', token }),
+
+  // Distribution
+  listDistributionJobs: (token: string, episodeId?: string) => {
+    const qs = episodeId ? `?episodeId=${episodeId}` : '';
+    return apiFetch<DistributionJob[]>(`/v1/distribution/jobs${qs}`, { token });
+  },
+  getDistributionJob: (token: string, id: string) =>
+    apiFetch<DistributionJob>(`/v1/distribution/jobs/${id}`, { token }),
+  createDistributionJob: (token: string, data: CreateDistributionJobInput) =>
+    apiFetch<DistributionJob>('/v1/distribution/jobs', { method: 'POST', body: JSON.stringify(data), token }),
+
+  // Seasons
+  listSeasons: (token: string, seriesId: string) =>
+    apiFetch<Season[]>(`/v1/series/${seriesId}/seasons`, { token }),
+  createSeason: (token: string, seriesId: string, data: { title: string; number: number; arcLabel?: string }) =>
+    apiFetch<Season>(`/v1/admin/series/${seriesId}/seasons`, { method: 'POST', body: JSON.stringify(data), token }),
+
+  // Author analytics
+  getSeriesAnalytics: (token: string, seriesId: string) =>
+    apiFetch(`/v1/author/series/${seriesId}/analytics`, { token }),
 
   // Auth
   login: (email: string, password: string) =>
@@ -174,6 +198,7 @@ interface CreateSeriesInput {
   slug?: string;
   description?: string;
   genreTags?: string[];
+  coverImageUrl?: string;
 }
 
 interface CreateEpisodeInput {
@@ -183,4 +208,43 @@ interface CreateEpisodeInput {
   tokenCost?: number;
   scheduledAt?: string;
   seasonId?: string;
+}
+
+export interface UpdateEpisodeInput {
+  title?: string;
+  description?: string;
+  isGated?: boolean;
+  tokenCost?: number;
+  durationSeconds?: number;
+  sortOrder?: number;
+}
+
+export interface DistributionJob {
+  id: string;
+  episodeId: string;
+  targetFormat: string;
+  targetPlatform: string;
+  status: string;
+  outputUrl?: string;
+  aiCopy?: string;
+  error?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface CreateDistributionJobInput {
+  episodeId: string;
+  targetFormat: string;
+  targetPlatform: string;
+  inputAssetId?: string;
+}
+
+export interface Season {
+  id: string;
+  seriesId: string;
+  number: number;
+  title: string;
+  arcLabel?: string;
+  sortOrder: number;
+  createdAt: string;
 }
