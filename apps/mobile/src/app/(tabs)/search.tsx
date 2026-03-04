@@ -4,230 +4,253 @@ import {
   Text,
   TextInput,
   FlatList,
+  ScrollView,
   TouchableOpacity,
+  Image,
   StyleSheet,
+  Dimensions,
 } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { api, type Series } from '@/lib/api-client';
 
+const SCREEN_W = Dimensions.get('window').width;
+const CARD_GAP = 12;
+const CARD_W = (SCREEN_W - 16 * 2 - CARD_GAP) / 2;
+
+const GENRES = [
+  { label: 'All', emoji: '✨' },
+  { label: 'Angel', emoji: '👼' },
+  { label: 'Demon', emoji: '😈' },
+  { label: 'Dragon', emoji: '🐉' },
+  { label: 'Fae', emoji: '🧚' },
+  { label: 'Mermaid', emoji: '🧜' },
+  { label: 'Shifter', emoji: '🐾' },
+  { label: 'Vampire', emoji: '🧛' },
+  { label: 'Werewolf', emoji: '🐺' },
+  { label: 'Witch', emoji: '🔮' },
+];
+
+const GENRE_COLORS: Record<string, string> = {
+  Vampire: '#dc2626',
+  Werewolf: '#d97706',
+  Fae: '#16a34a',
+  Dragon: '#ea580c',
+  Witch: '#7c3aed',
+  Demon: '#e11d48',
+  Mermaid: '#0891b2',
+  Shifter: '#ca8a04',
+  Angel: '#eab308',
+};
+
 export default function SearchScreen() {
   const router = useRouter();
   const [query, setQuery] = useState('');
+  const [activeGenre, setActiveGenre] = useState('All');
 
   const { data: allSeries } = useQuery({
     queryKey: ['series'],
     queryFn: () => api.listSeries(),
   });
 
-  const filtered = useMemo(() => {
+  const displayData = useMemo(() => {
     if (!allSeries) return [];
-    const q = query.toLowerCase().trim();
-    if (!q) return [];
-    return allSeries.filter(
-      (s) =>
-        s.title.toLowerCase().includes(q) ||
-        s.description?.toLowerCase().includes(q) ||
-        s.genreTags?.some((t) => t.toLowerCase().includes(q)),
-    );
-  }, [allSeries, query]);
+    let result = allSeries;
 
-  const genres = useMemo(() => {
-    if (!allSeries) return [];
-    const set = new Set<string>();
-    allSeries.forEach((s) => s.genreTags?.forEach((t) => set.add(t)));
-    return Array.from(set);
-  }, [allSeries]);
+    if (activeGenre !== 'All') {
+      result = result.filter((s) =>
+        s.genreTags?.some((t) => t.toLowerCase() === activeGenre.toLowerCase()),
+      );
+    }
 
-  const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
+    if (query.trim()) {
+      const q = query.toLowerCase().trim();
+      result = result.filter(
+        (s) =>
+          s.title.toLowerCase().includes(q) ||
+          s.description?.toLowerCase().includes(q) ||
+          s.genreTags?.some((t) => t.toLowerCase().includes(q)),
+      );
+    }
 
-  const genreFiltered = useMemo(() => {
-    if (!selectedGenre || !allSeries) return [];
-    return allSeries.filter((s) => s.genreTags?.includes(selectedGenre));
-  }, [allSeries, selectedGenre]);
+    return result;
+  }, [allSeries, query, activeGenre]);
 
-  const displayData = query.trim() ? filtered : genreFiltered;
-  const showGenres = !query.trim();
-
-  const renderSeries = ({ item }: { item: Series }) => (
-    <TouchableOpacity
-      onPress={() => router.push(`/series/${item.id}`)}
-      style={styles.resultCard}
-      activeOpacity={0.8}
-    >
-      <View style={styles.resultContent}>
-        <Text style={styles.resultTitle}>{item.title}</Text>
-        <Text style={styles.resultTags} numberOfLines={1}>
-          {item.genreTags?.join(', ')}
-        </Text>
-        {item.description && (
-          <Text style={styles.resultDesc} numberOfLines={2}>
-            {item.description}
-          </Text>
+  const renderCard = ({ item }: { item: Series }) => {
+    const genre = item.genreTags?.[0] ?? '';
+    const color = GENRE_COLORS[genre] ?? '#6b7280';
+    return (
+      <TouchableOpacity
+        style={styles.card}
+        activeOpacity={0.8}
+        onPress={() => router.push(`/series/${item.id}`)}
+      >
+        {item.coverImageUrl ? (
+          <Image source={{ uri: item.coverImageUrl }} style={styles.cardImage} resizeMode="cover" />
+        ) : (
+          <View style={[styles.cardImage, styles.placeholder]}>
+            <Text style={styles.placeholderText}>{item.title[0]}</Text>
+          </View>
         )}
-      </View>
-      <Text style={styles.chevron}>›</Text>
-    </TouchableOpacity>
-  );
+        {genre ? (
+          <View style={[styles.badge, { backgroundColor: color }]}>
+            <Text style={styles.badgeText}>{genre}</Text>
+          </View>
+        ) : null}
+        <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
+        <View style={styles.cardMeta}>
+          <Text style={styles.stars}>★★★★★</Text>
+          <Text style={styles.eps}>{(item as any)._count?.episodes ?? 2} eps</Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <View style={styles.container}>
+      <Text style={styles.header}>Discover</Text>
+
+      {/* Search bar */}
       <View style={styles.searchBar}>
+        <Text style={styles.searchIcon}>🔍</Text>
         <TextInput
           style={styles.searchInput}
-          placeholder="Search series, genres..."
+          placeholder="Search series..."
           placeholderTextColor="#4b5563"
           value={query}
-          onChangeText={(t) => {
-            setQuery(t);
-            setSelectedGenre(null);
-          }}
+          onChangeText={setQuery}
           autoCorrect={false}
           returnKeyType="search"
         />
         {query.length > 0 && (
-          <TouchableOpacity
-            onPress={() => setQuery('')}
-            style={styles.clearButton}
-          >
+          <TouchableOpacity onPress={() => setQuery('')} style={styles.clearBtn}>
             <Text style={styles.clearText}>✕</Text>
           </TouchableOpacity>
         )}
       </View>
 
-      {showGenres && (
-        <View style={styles.genreSection}>
-          <Text style={styles.sectionLabel}>Browse by Genre</Text>
-          <View style={styles.genreGrid}>
-            {genres.map((g) => (
-              <TouchableOpacity
-                key={g}
-                onPress={() =>
-                  setSelectedGenre(selectedGenre === g ? null : g)
-                }
-                style={[
-                  styles.genrePill,
-                  selectedGenre === g && styles.genrePillActive,
-                ]}
-                activeOpacity={0.8}
-              >
-                <Text
-                  style={[
-                    styles.genreText,
-                    selectedGenre === g && styles.genreTextActive,
-                  ]}
-                >
-                  {g}
-                </Text>
-              </TouchableOpacity>
-            ))}
+      {/* Genre pills */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.genreRow}
+      >
+        {GENRES.map((g) => (
+          <TouchableOpacity
+            key={g.label}
+            style={[styles.genrePill, activeGenre === g.label && styles.genrePillActive]}
+            onPress={() => setActiveGenre(g.label)}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.genreEmoji}>{g.emoji}</Text>
+            <Text style={[styles.genreLabel, activeGenre === g.label && styles.genreLabelActive]}>
+              {g.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+
+      {/* Results grid */}
+      <FlatList
+        data={displayData}
+        keyExtractor={(item) => item.id}
+        numColumns={2}
+        columnWrapperStyle={styles.gridRow}
+        contentContainerStyle={styles.gridContent}
+        renderItem={renderCard}
+        ListEmptyComponent={
+          <View style={styles.emptyWrap}>
+            <Text style={styles.emptyText}>
+              {query.trim() ? `No results for "${query}"` : 'No series in this genre'}
+            </Text>
           </View>
-        </View>
-      )}
-
-      {(query.trim() || selectedGenre) && (
-        <FlatList
-          data={displayData}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
-          ListEmptyComponent={
-            <View style={[styles.center, { paddingVertical: 60 }]}>
-              <Text style={styles.emptyText}>
-                {query.trim()
-                  ? `No results for "${query}"`
-                  : 'No series in this genre'}
-              </Text>
-            </View>
-          }
-          renderItem={renderSeries}
-        />
-      )}
-
-      {!query.trim() && !selectedGenre && (
-        <View style={[styles.center, { paddingVertical: 80 }]}>
-          <Text style={styles.hintText}>
-            Search for a series or tap a genre
-          </Text>
-        </View>
-      )}
+        }
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#030712' },
-  center: { alignItems: 'center', justifyContent: 'center' },
-  searchBar: {
+  header: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#fff',
     paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 8,
+    paddingTop: 16,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  searchInput: {
-    flex: 1,
     backgroundColor: '#0f172a',
     borderWidth: 1,
     borderColor: '#1e293b',
     borderRadius: 12,
-    paddingHorizontal: 16,
+    marginHorizontal: 16,
+    marginTop: 12,
+    paddingHorizontal: 12,
+  },
+  searchIcon: { fontSize: 14, marginRight: 8 },
+  searchInput: {
+    flex: 1,
     paddingVertical: 12,
-    color: '#ffffff',
+    color: '#fff',
     fontSize: 15,
   },
-  clearButton: {
-    position: 'absolute',
-    right: 28,
-    padding: 4,
-  },
+  clearBtn: { padding: 4 },
   clearText: { color: '#6b7280', fontSize: 14 },
-  genreSection: {
+  genreRow: {
     paddingHorizontal: 16,
-    paddingTop: 8,
-  },
-  sectionLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#6b7280',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 10,
-  },
-  genreGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    paddingVertical: 12,
     gap: 8,
   },
   genrePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#111827',
     borderRadius: 20,
     paddingHorizontal: 14,
     paddingVertical: 7,
+    gap: 5,
   },
-  genrePillActive: { backgroundColor: 'rgba(124,58,237,0.2)' },
-  genreText: { color: '#6b7280', fontSize: 13, fontWeight: '500' },
-  genreTextActive: { color: '#a855f7' },
-  listContent: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 32 },
-  resultCard: {
-    backgroundColor: '#0f172a',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#1e293b',
-    padding: 16,
-    marginBottom: 8,
-    flexDirection: 'row',
+  genrePillActive: { backgroundColor: 'rgba(124,58,237,0.25)' },
+  genreEmoji: { fontSize: 13 },
+  genreLabel: { color: '#6b7280', fontSize: 13, fontWeight: '500' },
+  genreLabelActive: { color: '#a855f7' },
+  gridRow: { paddingHorizontal: 16, gap: CARD_GAP },
+  gridContent: { paddingBottom: 32 },
+  card: {
+    width: CARD_W,
+    marginBottom: 16,
+    position: 'relative',
+  },
+  cardImage: {
+    width: '100%',
+    aspectRatio: 2 / 3,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  placeholder: {
+    backgroundColor: '#111827',
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  resultContent: { flex: 1 },
-  resultTitle: { color: '#ffffff', fontWeight: '600', fontSize: 15 },
-  resultTags: { color: '#a855f7', fontSize: 12, marginTop: 2 },
-  resultDesc: {
-    color: '#6b7280',
-    fontSize: 13,
-    lineHeight: 18,
-    marginTop: 4,
+  placeholderText: { color: '#374151', fontSize: 32, fontWeight: '700' },
+  badge: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
   },
-  chevron: { color: '#374151', fontSize: 18, marginLeft: 12 },
+  badgeText: { color: '#fff', fontSize: 10, fontWeight: '700' },
+  cardTitle: { color: '#fff', fontSize: 13, fontWeight: '600', marginTop: 8 },
+  cardMeta: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 },
+  stars: { color: '#eab308', fontSize: 11 },
+  eps: { color: '#6b7280', fontSize: 11 },
+  emptyWrap: { alignItems: 'center', paddingVertical: 60 },
   emptyText: { color: '#6b7280', fontSize: 14, textAlign: 'center' },
-  hintText: { color: '#4b5563', fontSize: 14 },
 });

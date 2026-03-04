@@ -165,7 +165,10 @@ export class ContentService {
         ...(!includeUnpublished && { status: SeriesStatus.published }),
       },
       orderBy: { createdAt: 'desc' },
-      include: { seasons: { orderBy: { number: 'asc' } } },
+      include: {
+        seasons: { orderBy: { number: 'asc' } },
+        _count: { select: { episodes: true } },
+      },
     });
   }
 

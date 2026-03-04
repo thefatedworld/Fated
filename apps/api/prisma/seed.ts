@@ -90,12 +90,17 @@ const USERS = [
 // SERIES + EPISODES
 // ─────────────────────────────────────────────
 
+const GCS_COVERS = 'https://storage.googleapis.com/fatedworld-thumbnails-staging/covers';
+
 const COVER_IMAGES = [
-  'https://images.unsplash.com/photo-1532012197267-da84d127e765?w=600&h=900&fit=crop',
-  'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=600&h=900&fit=crop',
-  'https://images.unsplash.com/photo-1519608487953-e999c86e7455?w=600&h=900&fit=crop',
-  'https://images.unsplash.com/photo-1534447677768-be436bb09401?w=600&h=900&fit=crop',
-  'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600&h=900&fit=crop',
+  `${GCS_COVERS}/bound-by-moon-cover.png`,
+  `${GCS_COVERS}/fangs-beneath-silk-cover.png`,
+  `${GCS_COVERS}/thorns-fey-court-cover.png`,
+  `${GCS_COVERS}/dragonheart-legacy-cover.png`,
+  `${GCS_COVERS}/spellbound-bride-cover.png`,
+  `${GCS_COVERS}/devils-familiar-cover.png`,
+  `${GCS_COVERS}/werewolf-affair-cover.png`,
+  `${GCS_COVERS}/mermaid-mafia-cover.png`,
 ];
 
 interface SeriesData {
@@ -110,66 +115,42 @@ interface SeriesData {
 
 const SERIES_DATA: SeriesData[] = [
   {
-    title: 'Moonbound',
-    slug: 'moonbound',
+    title: 'Bound by the Moon',
+    slug: 'bound-by-the-moon',
     description:
       'When a human scholar is captured by the ruthless alpha of the Silverclaw pack, she discovers that the bond between them is far older—and far more dangerous—than either could have imagined. A story of enemies forced together by fate.',
-    genreTags: ['werewolf', 'romantasy', 'enemies-to-lovers'],
+    genreTags: ['Werewolf', 'Shifter'],
     coverIndex: 0,
     seasonTitle: 'Season 1: The Binding',
     episodes: [
       { title: 'The Capture', description: 'Elara is taken from her village by Silverclaw raiders during the blood moon.', durationSeconds: 180 },
       { title: 'Wolves at the Gate', description: 'Inside the pack stronghold, Elara discovers the wolves are not what the stories say.', durationSeconds: 210 },
-      { title: 'The Mark', description: 'A mysterious mark appears on Elara\'s wrist—one that matches the alpha\'s.', durationSeconds: 195 },
-      { title: 'Pack Law', description: 'Kael must choose between pack tradition and the bond pulling him toward a human.', durationSeconds: 240 },
-      { title: 'First Hunt', description: 'Elara joins the hunt and earns a sliver of respect from the pack.', durationSeconds: 200 },
-      { title: 'Blood Oath', description: 'An ancient enemy forces Kael and Elara into a blood oath neither fully understands.', durationSeconds: 260 },
-      { title: 'The Rival Pack', description: 'The Ironclaw pack arrives with demands that could shatter the fragile peace.', durationSeconds: 230 },
-      { title: 'Shifting Allegiances', description: 'Elara uncovers a traitor within Silverclaw, and no one believes her.', durationSeconds: 250 },
-      { title: 'Under the Red Moon', description: 'The truth about the bond is revealed in an ancient temple beneath the mountains.', durationSeconds: 270 },
-      { title: 'Howl of the Bound', description: 'Kael and Elara face the Ironclaw alpha together, their bond finally unleashed.', durationSeconds: 300 },
     ],
   },
   {
-    title: 'Crimson Covenant',
-    slug: 'crimson-covenant',
+    title: 'Fangs Beneath Silk',
+    slug: 'fangs-beneath-silk',
     description:
       'In a city where vampires rule from glass towers, a mortal thief steals a relic that binds her to the oldest vampire lord. Now hunted by both sides, they must navigate forbidden desire and political treachery to survive.',
-    genreTags: ['vampire', 'dark-romance', 'forbidden-love'],
+    genreTags: ['Vampire'],
     coverIndex: 1,
     seasonTitle: 'Season 1: The Relic',
     episodes: [
       { title: 'The Heist', description: 'Sera breaks into the Nocturne Vault—and accidentally triggers an ancient curse.', durationSeconds: 190 },
       { title: 'Bound in Blood', description: 'Lord Cassian feels the tether snap into place, binding him to a mortal thief.', durationSeconds: 220 },
-      { title: 'The Crimson Court', description: 'Sera is dragged before the vampire council, her fate hanging by a thread.', durationSeconds: 200 },
-      { title: 'Bloodlines', description: 'Cassian reveals the relic\'s true purpose—and why the covenant was sealed centuries ago.', durationSeconds: 250 },
-      { title: 'A Thief\'s Gambit', description: 'Sera proposes a deal: help her survive, and she\'ll return the relic. Cassian has other plans.', durationSeconds: 210 },
-      { title: 'Nightfall Masquerade', description: 'At the annual vampire gala, alliances shift and Sera catches the eye of a dangerous rival.', durationSeconds: 270 },
-      { title: 'The Blood Price', description: 'The curse begins to take its toll, and Sera learns what the covenant demands of her.', durationSeconds: 240 },
-      { title: 'Crimson Dawn', description: 'An assassination attempt forces Cassian to reveal the depth of his power—and his weakness.', durationSeconds: 260 },
-      { title: 'Betrayal at Court', description: 'Someone close to Cassian has been feeding information to the hunters. Sera investigates.', durationSeconds: 280 },
-      { title: 'The Covenant Unleashed', description: 'In a final confrontation at the Nocturne Vault, the true meaning of the covenant is revealed.', durationSeconds: 300 },
     ],
   },
   {
-    title: 'The Fae Accord',
-    slug: 'the-fae-accord',
+    title: 'Thorns of the Fey Court',
+    slug: 'thorns-of-the-fey-court',
     description:
-      'A mortal diplomat is sent to broker peace between the warring Seelie and Unseelie courts. But the fae play by different rules, and the price of failure is her soul. Caught between two cunning fae princes, she must outwit them both.',
-    genreTags: ['fae', 'court-intrigue', 'romantasy'],
+      'A human bride is traded to the ruthless king of the fae. Caught between the warring Seelie and Unseelie courts, she must outwit two cunning princes—or lose her soul to a bargain she never agreed to.',
+    genreTags: ['Fae'],
     coverIndex: 2,
     seasonTitle: 'Season 1: The Accord',
     episodes: [
       { title: 'The Summons', description: 'Rowan receives the impossible assignment: negotiate peace with the fae courts.', durationSeconds: 170 },
       { title: 'Through the Veil', description: 'Crossing into the Faelands, Rowan realizes nothing she was taught about the fae is true.', durationSeconds: 200 },
-      { title: 'The Seelie Prince', description: 'Prince Aldric offers Rowan his protection—for a price she cannot yet see.', durationSeconds: 195 },
-      { title: 'Unseelie Shadows', description: 'The Unseelie prince, Maren, presents a counter-offer laced with dark magic.', durationSeconds: 220 },
-      { title: 'Rules of the Game', description: 'Rowan discovers that fae bargains are literal, and she\'s already made three.', durationSeconds: 185 },
-      { title: 'The Iron Test', description: 'A trial by iron reveals something unexpected about Rowan\'s bloodline.', durationSeconds: 240 },
-      { title: 'Court of Thorns', description: 'Betrayed by an ally, Rowan is imprisoned in the Court of Thorns.', durationSeconds: 255 },
-      { title: 'The Third Bargain', description: 'To escape, Rowan must strike a deal with the one fae she swore never to trust.', durationSeconds: 230 },
-      { title: 'War of Whispers', description: 'Both courts prepare for war, and Rowan holds the only key to preventing it.', durationSeconds: 270 },
-      { title: 'The Accord', description: 'In a climactic negotiation, Rowan reshapes the accord—and changes the fae courts forever.', durationSeconds: 290 },
     ],
   },
   {
@@ -177,41 +158,64 @@ const SERIES_DATA: SeriesData[] = [
     slug: 'dragonheart-legacy',
     description:
       'The last dragon-bonded warrior awakens in a world that has forgotten magic. When ancient dragons begin to return, only she can bridge the gap between the old world and the new. An epic tale of fire, flight, and finding your place.',
-    genreTags: ['dragon', 'shifter', 'epic-fantasy'],
+    genreTags: ['Dragon', 'Shifter'],
     coverIndex: 3,
     seasonTitle: 'Season 1: Awakening',
     episodes: [
       { title: 'The Awakening', description: 'Lyra wakes in a cave surrounded by dragon bones, with no memory of who she is.', durationSeconds: 200 },
       { title: 'Ember and Ash', description: 'A young fire drake imprints on Lyra, reigniting a bond thought lost to history.', durationSeconds: 190 },
-      { title: 'The Forgotten City', description: 'Lyra discovers the ruins of Drakenmoor, once the seat of dragon-bonded power.', durationSeconds: 210 },
-      { title: 'Wings of War', description: 'A military airship mistakes Lyra\'s drake for a threat, and the confrontation goes badly.', durationSeconds: 250 },
-      { title: 'The Historian', description: 'Professor Thorn has spent his life searching for proof that dragons were real. Lyra is that proof.', durationSeconds: 180 },
-      { title: 'Dragonfire', description: 'When Lyra\'s drake is captured, she discovers abilities she didn\'t know she had.', durationSeconds: 270 },
-      { title: 'The Bonded', description: 'Other dragon eggs begin to hatch across the continent, and not all bonds are benevolent.', durationSeconds: 240 },
-      { title: 'Sky Battle', description: 'Lyra leads a desperate aerial defense against a corrupted dragon-rider.', durationSeconds: 280 },
-      { title: 'Heart of the Mountain', description: 'Deep beneath Drakenmoor, Lyra finds the Dragonheart—the source of all bonding magic.', durationSeconds: 260 },
-      { title: 'Legacy Reborn', description: 'With dragons returning and the world watching, Lyra must decide what the legacy means.', durationSeconds: 300 },
     ],
   },
   {
-    title: 'Witchwood Coven',
-    slug: 'witchwood-coven',
+    title: 'The Spellbound Bride',
+    slug: 'the-spellbound-bride',
     description:
-      'Five outcasts with untrained powers are accepted into the secretive Witchwood Academy. But the school hides dark secrets, and the coven they form may be the only thing standing between the world and an ancient evil. A tale of found family and forbidden magic.',
-    genreTags: ['witch', 'academy', 'found-family'],
+      'Five outcasts with untrained powers are accepted into the secretive Witchwood Academy. But the school hides dark secrets, and the coven they form may be the only thing standing between the world and an ancient evil.',
+    genreTags: ['Witch'],
     coverIndex: 4,
     seasonTitle: 'Season 1: First Year',
     episodes: [
       { title: 'The Invitation', description: 'Five strangers each receive a mysterious black envelope inviting them to Witchwood Academy.', durationSeconds: 175 },
       { title: 'Orientation', description: 'The new students learn the first rule of Witchwood: magic has a price.', durationSeconds: 195 },
-      { title: 'The Familiar', description: 'Each student must summon a familiar. Not everyone succeeds—and one summons something unexpected.', durationSeconds: 210 },
-      { title: 'Herb Lore', description: 'A potions class goes wrong, revealing that one of the five has power beyond their control.', durationSeconds: 185 },
-      { title: 'The Whispering Library', description: 'The restricted section of the library contains books that whisper secrets to those who listen.', durationSeconds: 200 },
-      { title: 'The Blood Moon Exam', description: 'The first-year exam takes place under a blood moon, and the forest comes alive with danger.', durationSeconds: 260 },
-      { title: 'Coven Bonds', description: 'The five form an unofficial coven, defying academy tradition and awakening old magic.', durationSeconds: 235 },
-      { title: 'The Headmistress\'s Secret', description: 'A hidden passage reveals the headmistress has been keeping something beneath the school for decades.', durationSeconds: 250 },
-      { title: 'Dark Roots', description: 'The ancient evil stirs, feeding on the magic of the students. The coven must act.', durationSeconds: 275 },
-      { title: 'The Coven\'s Stand', description: 'In a desperate ritual, the five combine their powers to seal the darkness—for now.', durationSeconds: 300 },
+    ],
+  },
+  {
+    title: 'The Devil\'s Familiar',
+    slug: 'the-devils-familiar',
+    description:
+      'When a mortal librarian accidentally summons a high-ranking demon, she becomes bound as his familiar. Now entangled in infernal politics and forbidden attraction, she must survive the demon courts—or risk losing her humanity forever.',
+    genreTags: ['Demon', 'Fae'],
+    coverIndex: 5,
+    seasonTitle: 'Season 1: The Summoning',
+    episodes: [
+      { title: 'The Accidental Summoning', description: 'Clara reads from a forbidden grimoire and summons Azrael, a demon lord who should not exist on this plane.', durationSeconds: 195 },
+      { title: 'The Familiar Bond', description: 'The bond snaps into place—Clara can feel his emotions, his hunger, his ancient rage.', durationSeconds: 210 },
+    ],
+  },
+  {
+    title: 'A Werewolf Affair',
+    slug: 'a-werewolf-affair',
+    description:
+      'Two rival pack heirs are forced into an arranged mating to prevent a war. But old grudges, secret lovers, and a conspiracy that runs deeper than either pack imagined threaten to tear them apart before the bond can take hold.',
+    genreTags: ['Werewolf'],
+    coverIndex: 6,
+    seasonTitle: 'Season 1: The Arrangement',
+    episodes: [
+      { title: 'The Treaty', description: 'The alpha council decrees that Luka and Mara must mate or face exile. Neither is willing.', durationSeconds: 185 },
+      { title: 'Hostile Territory', description: 'Mara moves into the Blackthorn packlands and discovers Luka already has a lover.', durationSeconds: 200 },
+    ],
+  },
+  {
+    title: 'The Mermaid Mafia',
+    slug: 'the-mermaid-mafia',
+    description:
+      'Beneath the glittering surface of a coastal city, merfolk run the most dangerous crime syndicate in the supernatural world. When a human detective stumbles onto their operation, the syndicate boss offers her a choice: join them, or disappear beneath the waves.',
+    genreTags: ['Mermaid'],
+    coverIndex: 7,
+    seasonTitle: 'Season 1: Deep Water',
+    episodes: [
+      { title: 'The Sting', description: 'Detective Naia Reeves follows a money trail to a waterfront club—and finds something impossible.', durationSeconds: 190 },
+      { title: 'The Offer', description: 'Syndicate boss Kai Morvane gives Naia twenty-four hours to decide her fate.', durationSeconds: 205 },
     ],
   },
 ];

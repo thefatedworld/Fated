@@ -33,9 +33,9 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Browse',
+          title: 'Home',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="compass-outline" size={size} color={color} />
+            <Ionicons name="home-outline" size={size} color={color} />
           ),
         }}
       />
@@ -51,9 +51,18 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="library"
         options={{
-          title: 'Library',
+          title: 'My List',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="library-outline" size={size} color={color} />
+            <Ionicons name="heart-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="community"
+        options={{
+          title: 'Community',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="people-outline" size={size} color={color} />
           ),
         }}
       />

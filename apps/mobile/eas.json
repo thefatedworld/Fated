@@ -14,7 +14,7 @@
         "simulator": true
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://fated-api-staging-712589882982.us-central1.run.app"
+        "EXPO_PUBLIC_API_URL": "https://fated-api-staging-xcl6j6fota-uc.a.run.app"
       }
     },
     "preview": {
@@ -26,7 +26,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://fated-api-staging-712589882982.us-central1.run.app"
+        "EXPO_PUBLIC_API_URL": "https://fated-api-staging-xcl6j6fota-uc.a.run.app"
       }
     },
     "production": {
@@ -35,7 +35,7 @@
         "image": "latest"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://fated-api-staging-712589882982.us-central1.run.app"
+        "EXPO_PUBLIC_API_URL": "https://fated-api-staging-xcl6j6fota-uc.a.run.app"
       }
     }
   },
