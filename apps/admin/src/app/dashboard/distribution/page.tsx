@@ -20,12 +20,14 @@ export default function DistributionPage() {
   const [episodes, setEpisodes] = useState<Episode[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
+  const [expandedJob, setExpandedJob] = useState<string | null>(null);
 
   const [selectedSeriesId, setSelectedSeriesId] = useState('');
   const [selectedEpisodeId, setSelectedEpisodeId] = useState('');
   const [targetPlatform, setTargetPlatform] = useState(PLATFORMS[0]);
   const [targetFormat, setTargetFormat] = useState(FORMATS[0]);
   const [creating, setCreating] = useState(false);
+  const [retrying, setRetrying] = useState<string | null>(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -78,6 +80,17 @@ export default function DistributionPage() {
     setCreating(false);
   }
 
+  async function handleRetry(jobId: string) {
+    const token = getToken();
+    if (!token) return;
+    setRetrying(jobId);
+    try {
+      await adminApi.retryDistributionJob(token, jobId);
+      loadData();
+    } catch { /* ignore */ }
+    setRetrying(null);
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-32">
@@ -85,9 +98,6 @@ export default function DistributionPage() {
       </div>
     );
   }
-
-  const episodeTitleMap = new Map<string, string>();
-  episodes.forEach((e) => episodeTitleMap.set(e.id, `Ep ${e.number}: ${e.title}`));
 
   return (
     <div>
@@ -191,7 +201,7 @@ export default function DistributionPage() {
               <th className="text-left text-gray-500 font-medium px-4 py-3 text-xs">Format</th>
               <th className="text-left text-gray-500 font-medium px-4 py-3 text-xs">Status</th>
               <th className="text-left text-gray-500 font-medium px-4 py-3 text-xs">Created</th>
-              <th className="text-left text-gray-500 font-medium px-4 py-3 text-xs">Output</th>
+              <th className="text-left text-gray-500 font-medium px-4 py-3 text-xs">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -204,8 +214,10 @@ export default function DistributionPage() {
             )}
             {jobs.map((job) => (
               <tr key={job.id} className="border-b border-gray-800/40 hover:bg-gray-800/20">
-                <td className="px-4 py-3 text-white font-medium">
-                  {job.episodeId.slice(0, 8)}...
+                <td className="px-4 py-3">
+                  <span className="text-white font-medium">
+                    {job.episode?.title ?? job.episodeId.slice(0, 8) + '...'}
+                  </span>
                 </td>
                 <td className="px-4 py-3">
                   <span className="capitalize text-gray-300">{job.targetPlatform}</span>
@@ -222,15 +234,25 @@ export default function DistributionPage() {
                   {new Date(job.createdAt).toLocaleDateString()}
                 </td>
                 <td className="px-4 py-3">
-                  {job.outputGcsKey ? (
-                    <span className="text-purple-400 text-xs" title={job.outputGcsKey}>
-                      Output ready
-                    </span>
-                  ) : job.aiDescription ? (
-                    <span className="text-green-400 text-xs">AI copy ready</span>
-                  ) : (
-                    <span className="text-gray-600 text-xs">—</span>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {(job.aiDescription || job.outputGcsKey) && (
+                      <button
+                        onClick={() => setExpandedJob(expandedJob === job.id ? null : job.id)}
+                        className="text-purple-400 hover:text-purple-300 text-xs font-medium transition-colors"
+                      >
+                        {expandedJob === job.id ? 'Hide' : 'View'}
+                      </button>
+                    )}
+                    {(job.status === 'failed' || job.status === 'pending') && (
+                      <button
+                        onClick={() => handleRetry(job.id)}
+                        disabled={retrying === job.id}
+                        className="text-amber-400 hover:text-amber-300 text-xs font-medium transition-colors disabled:opacity-40"
+                      >
+                        {retrying === job.id ? 'Retrying...' : 'Retry'}
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
@@ -238,34 +260,93 @@ export default function DistributionPage() {
         </table>
       </div>
 
-      {/* AI Copy preview */}
-      {jobs.some((j) => j.aiDescription) && (
-        <div className="mt-6">
-          <h3 className="text-sm font-medium text-gray-400 mb-3">AI-Generated Copy</h3>
-          <div className="space-y-3">
-            {jobs.filter((j) => j.aiDescription).map((j) => (
-              <div key={j.id} className="bg-gray-900/80 border border-gray-800 rounded-xl p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="capitalize text-purple-400 text-xs font-medium">{j.targetPlatform}</span>
-                  <span className="text-gray-600 text-xs">·</span>
-                  <span className="text-gray-500 text-xs">{j.targetFormat.replace(/_/g, ' ')}</span>
-                </div>
-                <p className="text-gray-300 text-sm whitespace-pre-wrap">{j.aiDescription}</p>
-                {j.aiCaption && (
-                  <p className="text-gray-500 text-xs mt-2 italic">{j.aiCaption}</p>
-                )}
-                {j.aiTags.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-2">
-                    {j.aiTags.map((tag) => (
-                      <span key={tag} className="bg-gray-800 text-gray-400 text-xs px-2 py-0.5 rounded-md">#{tag}</span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
+      {/* Expanded job detail panels */}
+      {jobs.filter((j) => expandedJob === j.id && (j.aiDescription || j.outputGcsKey)).map((job) => (
+        <div key={`detail-${job.id}`} className="mt-4 bg-gray-900/80 border border-gray-800 rounded-xl p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <span className="capitalize text-purple-400 text-sm font-medium">{job.targetPlatform}</span>
+              <span className="text-gray-600">&middot;</span>
+              <span className="text-gray-400 text-sm">{job.episode?.title ?? 'Unknown episode'}</span>
+              <span className="text-gray-600">&middot;</span>
+              <span className="text-gray-500 text-xs">{job.targetFormat.replace(/_/g, ' ')}</span>
+            </div>
+            <button
+              onClick={() => setExpandedJob(null)}
+              className="text-gray-500 hover:text-white text-sm"
+            >
+              &times;
+            </button>
           </div>
+
+          {job.aiDescription && (
+            <div className="mb-4">
+              <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">AI Description</h4>
+              <p className="text-gray-300 text-sm whitespace-pre-wrap bg-gray-950/50 rounded-lg p-3 border border-gray-800/40">
+                {job.aiDescription}
+              </p>
+              <button
+                onClick={() => navigator.clipboard.writeText(job.aiDescription!)}
+                className="mt-1.5 text-xs text-purple-400 hover:text-purple-300 transition-colors"
+              >
+                Copy to clipboard
+              </button>
+            </div>
+          )}
+
+          {Array.isArray(job.aiTitleVariants) && job.aiTitleVariants.length > 0 && (
+            <div className="mb-4">
+              <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Title Variants</h4>
+              <div className="space-y-1.5">
+                {job.aiTitleVariants.map((title, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <span className="text-gray-300 text-sm bg-gray-950/50 rounded-lg px-3 py-1.5 border border-gray-800/40 flex-1">
+                      {String(title)}
+                    </span>
+                    <button
+                      onClick={() => navigator.clipboard.writeText(String(title))}
+                      className="text-xs text-purple-400 hover:text-purple-300 transition-colors flex-shrink-0"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {job.aiTags.length > 0 && (
+            <div className="mb-4">
+              <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Tags</h4>
+              <div className="flex flex-wrap gap-1.5">
+                {job.aiTags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="bg-gray-800 text-gray-300 text-xs px-2.5 py-1 rounded-md cursor-pointer hover:bg-gray-700 transition-colors"
+                    onClick={() => navigator.clipboard.writeText(`#${tag}`)}
+                    title="Click to copy"
+                  >
+                    #{tag}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {job.aiCaption && (
+            <div>
+              <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Caption</h4>
+              <p className="text-gray-400 text-sm italic">{job.aiCaption}</p>
+            </div>
+          )}
+
+          {job.errorMessage && (
+            <div className="mt-3 bg-red-950/30 border border-red-900/40 rounded-lg p-3">
+              <p className="text-red-400 text-xs">{job.errorMessage}</p>
+            </div>
+          )}
         </div>
-      )}
+      ))}
     </div>
   );
 }

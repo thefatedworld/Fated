@@ -187,6 +187,8 @@ export class AnalyticsService {
       }),
     ]);
 
+    const dailyCommunity = await this.getDailyCommunityBreakdown(since);
+
     return {
       community: {
         threadsCreated,
@@ -217,7 +219,51 @@ export class AnalyticsService {
         replyCount: t._count.replies,
         createdAt: t.createdAt,
       })),
+      dailyCommunity,
     };
+  }
+
+  private async getDailyCommunityBreakdown(since: Date) {
+    const rows = await this.prisma.$queryRaw<
+      { day: Date; threads: bigint; replies: bigint; votes: bigint; wiki_edits: bigint }[]
+    >`
+      SELECT
+        d.day::date AS day,
+        COALESCE(t.cnt, 0) AS threads,
+        COALESCE(r.cnt, 0) AS replies,
+        COALESCE(v.cnt, 0) AS votes,
+        COALESCE(w.cnt, 0) AS wiki_edits
+      FROM generate_series(${since}::date, CURRENT_DATE, '1 day'::interval) AS d(day)
+      LEFT JOIN (
+        SELECT created_at::date AS day, COUNT(*) AS cnt
+        FROM threads WHERE created_at >= ${since} AND is_deleted = false
+        GROUP BY 1
+      ) t ON t.day = d.day
+      LEFT JOIN (
+        SELECT created_at::date AS day, COUNT(*) AS cnt
+        FROM thread_replies WHERE created_at >= ${since} AND is_deleted = false
+        GROUP BY 1
+      ) r ON r.day = d.day
+      LEFT JOIN (
+        SELECT created_at::date AS day, COUNT(*) AS cnt
+        FROM votes WHERE created_at >= ${since}
+        GROUP BY 1
+      ) v ON v.day = d.day
+      LEFT JOIN (
+        SELECT created_at::date AS day, COUNT(*) AS cnt
+        FROM wiki_revisions WHERE created_at >= ${since}
+        GROUP BY 1
+      ) w ON w.day = d.day
+      ORDER BY d.day DESC
+    `;
+
+    return rows.map((r) => ({
+      date: r.day,
+      threads: Number(r.threads),
+      replies: Number(r.replies),
+      votes: Number(r.votes),
+      wikiEdits: Number(r.wiki_edits),
+    }));
   }
 
   /**

@@ -127,6 +127,8 @@ export const adminApi = {
     apiFetch<DistributionJob>(`/v1/distribution/jobs/${id}`, { token }),
   createDistributionJob: (token: string, data: CreateDistributionJobInput) =>
     apiFetch<DistributionJob>('/v1/distribution/jobs', { method: 'POST', body: JSON.stringify(data), token }),
+  retryDistributionJob: (token: string, id: string) =>
+    apiFetch<DistributionJob>(`/v1/distribution/jobs/${id}/retry`, { method: 'POST', token }),
 
   // Seasons
   listSeasons: (token: string, seriesId: string) =>
@@ -237,10 +239,11 @@ export interface DistributionJob {
   aiCaption?: string;
   aiDescription?: string;
   aiTags: string[];
-  aiTitleVariants?: unknown;
+  aiTitleVariants?: string[];
   errorMessage?: string;
   createdAt: string;
   completedAt?: string;
+  episode?: { id: string; title: string; seriesId: string };
 }
 
 interface CreateDistributionJobInput {
@@ -289,6 +292,13 @@ export interface CommunityStats {
     voteCount: number;
     replyCount: number;
     createdAt: string;
+  }[];
+  dailyCommunity?: {
+    date: string;
+    threads: number;
+    replies: number;
+    votes: number;
+    wikiEdits: number;
   }[];
 }
 

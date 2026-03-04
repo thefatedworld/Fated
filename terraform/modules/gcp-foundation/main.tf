@@ -274,6 +274,13 @@ resource "google_storage_bucket" "upload" {
   location                    = local.region
   uniform_bucket_level_access = true
   force_destroy               = local.env != "prod"
+
+  cors {
+    origin          = ["https://admin.fatedworld.com", "https://*.run.app"]
+    method          = ["PUT", "POST", "OPTIONS"]
+    response_header = ["Content-Type", "Content-Length", "x-goog-resumable"]
+    max_age_seconds = 3600
+  }
 }
 
 resource "google_storage_bucket" "delivery" {

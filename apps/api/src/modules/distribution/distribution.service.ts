@@ -237,6 +237,45 @@ Return a JSON object with exactly these keys:
     });
   }
 
+  async retryJob(jobId: string, actorId: string, role: UserRole) {
+    const job = await this.prisma.distributionJob.findUnique({ where: { id: jobId } });
+    if (!job) throw new NotFoundException('Job not found');
+
+    const isAdmin = role === UserRole.content_admin || role === UserRole.superadmin;
+    if (!isAdmin) throw new ForbiddenException('Only admins can retry jobs');
+
+    await this.prisma.distributionJob.update({
+      where: { id: jobId },
+      data: { status: DistributionJobStatus.pending, errorMessage: null },
+    });
+
+    const queueName = this.config.get<string>('CLOUD_TASKS_DISTRIBUTION_QUEUE', '');
+    if (queueName) {
+      try {
+        await this.cloudTasks.enqueueTask(queueName, {
+          url: `/v1/internal/distribution/process/${jobId}`,
+          body: { jobId },
+        });
+      } catch (err) {
+        this.logger.warn(`Failed to enqueue retry for job ${jobId}: ${err}`);
+      }
+    }
+
+    await this.audit.log({
+      actorId,
+      actorRole: role,
+      action: AuditAction.distribution_job_create,
+      targetType: 'distribution_job',
+      targetId: jobId,
+      payload: { retry: true },
+    });
+
+    return this.prisma.distributionJob.findUnique({
+      where: { id: jobId },
+      include: { episode: { select: { id: true, title: true, seriesId: true } } },
+    });
+  }
+
   async getJob(jobId: string, requestedBy: string, role: UserRole) {
     const job = await this.prisma.distributionJob.findUnique({
       where: { id: jobId },

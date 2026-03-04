@@ -55,4 +55,11 @@ export class DistributionController {
       requestedByRole: user.role as UserRole,
     });
   }
+
+  @Post('jobs/:id/retry')
+  @Roles(UserRole.content_admin, UserRole.superadmin)
+  @ApiOperation({ summary: 'Retry a failed or stuck distribution job' })
+  retryJob(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
+    return this.distributionService.retryJob(id, user.id, user.role as UserRole);
+  }
 }

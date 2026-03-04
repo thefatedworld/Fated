@@ -1,9 +1,18 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { adminApi, type Series, type CommunityStats, type TrendingSeries } from '@/lib/api-client';
 import { getToken } from '@/lib/utils';
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from 'recharts';
 
 interface PlatformSnapshot {
   date: string;
@@ -12,6 +21,215 @@ interface PlatformSnapshot {
   totalWatchMinutes: string;
   tokensSold: string;
   unlocks: number;
+}
+
+type MetricKey = 'views' | 'users' | 'tokens' | 'unlocks' | 'watchMinutes'
+  | 'threads' | 'replies' | 'votes' | 'wikiEdits';
+
+interface ModalMetric {
+  key: MetricKey;
+  label: string;
+  color: string;
+  stroke: string;
+  suffix?: string;
+}
+
+const MODAL_RANGES = [
+  { label: '1d', days: 1 },
+  { label: '7d', days: 7 },
+  { label: '14d', days: 14 },
+  { label: '30d', days: 30 },
+  { label: 'All', days: 3650 },
+] as const;
+
+const METRIC_CONFIG: Record<MetricKey, { stroke: string; gradientId: string }> = {
+  views: { stroke: '#a855f7', gradientId: 'gModal' },
+  users: { stroke: '#3b82f6', gradientId: 'gModal' },
+  tokens: { stroke: '#f59e0b', gradientId: 'gModal' },
+  unlocks: { stroke: '#22c55e', gradientId: 'gModal' },
+  watchMinutes: { stroke: '#14b8a6', gradientId: 'gModal' },
+  threads: { stroke: '#f43f5e', gradientId: 'gModal' },
+  replies: { stroke: '#06b6d4', gradientId: 'gModal' },
+  votes: { stroke: '#f97316', gradientId: 'gModal' },
+  wikiEdits: { stroke: '#6366f1', gradientId: 'gModal' },
+};
+
+function extractMetricValue(snapshot: PlatformSnapshot, key: MetricKey): number {
+  switch (key) {
+    case 'views': return snapshot.totalViews;
+    case 'users': return snapshot.newUsers;
+    case 'tokens': return Number(snapshot.tokensSold || 0);
+    case 'unlocks': return snapshot.unlocks;
+    case 'watchMinutes': return Number(snapshot.totalWatchMinutes || 0);
+    default: return 0;
+  }
+}
+
+const COMMUNITY_KEYS = new Set<MetricKey>(['threads', 'replies', 'votes', 'wikiEdits']);
+
+function MetricModal({
+  metric,
+  onClose,
+}: {
+  metric: ModalMetric;
+  onClose: () => void;
+}) {
+  const [days, setDays] = useState(30);
+  const [chartData, setChartData] = useState<{ date: string; value: number }[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  const loadModalData = useCallback(async (d: number) => {
+    const token = getToken();
+    if (!token) return;
+    setLoading(true);
+    try {
+      if (COMMUNITY_KEYS.has(metric.key)) {
+        const cs = await adminApi.getCommunityStats(token, d);
+        const daily: { date: string; value: number }[] = (cs.dailyCommunity ?? []).map(
+          (row: Record<string, unknown>) => ({
+            date: String(row.date),
+            value: Number(row[metric.key] ?? 0),
+          }),
+        );
+        setChartData(daily.reverse());
+        setTotal(daily.reduce((a, r) => a + r.value, 0));
+      } else {
+        const snaps = (await adminApi.getPlatformSnapshot(token, d)) as PlatformSnapshot[];
+        const mapped = [...snaps].reverse().map((s) => ({
+          date: new Date(s.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+          value: extractMetricValue(s, metric.key),
+        }));
+        setChartData(mapped);
+        setTotal(mapped.reduce((a, r) => a + r.value, 0));
+      }
+    } catch { /* ignore */ }
+    setLoading(false);
+  }, [metric.key]);
+
+  useEffect(() => { loadModalData(days); }, [days, loadModalData]);
+
+  const cfg = METRIC_CONFIG[metric.key];
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="bg-gray-950 border border-gray-800 rounded-2xl w-full max-w-2xl mx-4 p-6 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-5">
+          <div>
+            <h2 className="text-lg font-semibold text-white">{metric.label}</h2>
+            <p className="text-2xl font-bold mt-1" style={{ color: cfg.stroke }}>
+              {total.toLocaleString()}{metric.suffix ?? ''}
+            </p>
+          </div>
+          <div className="flex items-center gap-1 bg-gray-900 border border-gray-800 rounded-lg p-0.5">
+            {MODAL_RANGES.map((r) => (
+              <button
+                key={r.label}
+                onClick={() => setDays(r.days)}
+                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                  days === r.days
+                    ? 'bg-purple-600/20 text-purple-400'
+                    : 'text-gray-500 hover:text-gray-300'
+                }`}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={onClose}
+            className="text-gray-500 hover:text-white transition-colors text-xl leading-none ml-3"
+          >
+            &times;
+          </button>
+        </div>
+
+        {loading ? (
+          <div className="flex items-center justify-center h-64">
+            <div className="w-5 h-5 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : chartData.length === 0 ? (
+          <div className="flex items-center justify-center h-64 text-gray-500 text-sm">
+            No data for this period.
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height={300}>
+            <AreaChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+              <defs>
+                <linearGradient id="gModal" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={cfg.stroke} stopOpacity={0.4} />
+                  <stop offset="95%" stopColor={cfg.stroke} stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+              <XAxis
+                dataKey="date"
+                tick={{ fill: '#6b7280', fontSize: 11 }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <YAxis
+                tick={{ fill: '#6b7280', fontSize: 11 }}
+                axisLine={false}
+                tickLine={false}
+                width={50}
+              />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#111827',
+                  border: '1px solid #374151',
+                  borderRadius: 8,
+                  fontSize: 12,
+                }}
+                labelStyle={{ color: '#9ca3af' }}
+                formatter={(value: number) => [
+                  `${value.toLocaleString()}${metric.suffix ?? ''}`,
+                  metric.label,
+                ]}
+              />
+              <Area
+                type="monotone"
+                dataKey="value"
+                stroke={cfg.stroke}
+                fill="url(#gModal)"
+                strokeWidth={2}
+                name={metric.label}
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        )}
+
+        {!loading && chartData.length > 0 && (
+          <div className="mt-4 max-h-48 overflow-y-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-gray-800">
+                  <th className="text-left text-gray-500 font-medium py-1.5 px-2">Date</th>
+                  <th className="text-right text-gray-500 font-medium py-1.5 px-2">{metric.label}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...chartData].reverse().map((d) => (
+                  <tr key={d.date} className="border-b border-gray-800/40">
+                    <td className="text-gray-400 py-1 px-2">{d.date}</td>
+                    <td className="text-right font-medium py-1 px-2" style={{ color: cfg.stroke }}>
+                      {d.value.toLocaleString()}{metric.suffix ?? ''}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function MiniBarChart({ data, maxVal, color }: { data: number[]; maxVal: number; color: string }) {
@@ -74,6 +292,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [daysRange, setDaysRange] = useState(7);
+  const [selectedMetric, setSelectedMetric] = useState<ModalMetric | null>(null);
 
   useEffect(() => {
     loadData();
@@ -171,11 +390,11 @@ export default function DashboardPage() {
   }
 
   const cs = communityStats;
-  const communityCards = cs ? [
-    { label: 'Threads Created', icon: '💬', color: 'rose', value: cs.community.threadsCreated, prior: cs.community.threadsCreatedPrior },
-    { label: 'Replies Posted', icon: '↩', color: 'cyan', value: cs.community.repliesPosted, prior: cs.community.repliesPostedPrior },
-    { label: 'Community Votes', icon: '⬆', color: 'orange', value: cs.community.communityVotes, prior: cs.community.communityVotesPrior },
-    { label: 'Wiki Edits', icon: '📝', color: 'indigo', value: cs.community.wikiEditsSubmitted, prior: cs.community.wikiEditsSubmittedPrior },
+  const communityCards: { key: MetricKey; label: string; icon: string; color: string; value: number; prior: number }[] = cs ? [
+    { key: 'threads', label: 'Threads Created', icon: '💬', color: 'rose', value: cs.community.threadsCreated, prior: cs.community.threadsCreatedPrior },
+    { key: 'replies', label: 'Replies Posted', icon: '↩', color: 'cyan', value: cs.community.repliesPosted, prior: cs.community.repliesPostedPrior },
+    { key: 'votes', label: 'Community Votes', icon: '⬆', color: 'orange', value: cs.community.communityVotes, prior: cs.community.communityVotesPrior },
+    { key: 'wikiEdits', label: 'Wiki Edits', icon: '📝', color: 'indigo', value: cs.community.wikiEditsSubmitted, prior: cs.community.wikiEditsSubmittedPrior },
   ] : [];
 
   const maxTrendingViews = Math.max(...trendingSeries.map((s) => s.views), 1);
@@ -216,7 +435,19 @@ export default function DashboardPage() {
         {STAT_CARDS.map((card) => {
           const maxVal = Math.max(...(card.daily || [0]));
           return (
-            <div key={card.key} className={`rounded-xl p-5 border ${colorMap[card.color]}`}>
+            <div
+              key={card.key}
+              className={`rounded-xl p-5 border cursor-pointer hover:scale-[1.02] transition-transform ${colorMap[card.color]}`}
+              onClick={() =>
+                setSelectedMetric({
+                  key: card.key,
+                  label: card.label,
+                  color: card.color,
+                  stroke: METRIC_CONFIG[card.key].stroke,
+                  suffix: 'suffix' in card ? (card as { suffix?: string }).suffix : undefined,
+                })
+              }
+            >
               <div className="flex items-center justify-between mb-1">
                 <span className="text-xs font-medium uppercase tracking-wider opacity-70">{card.label}</span>
                 <span className="text-lg">{card.icon}</span>
@@ -239,7 +470,18 @@ export default function DashboardPage() {
           <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Community Engagement</h2>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
             {communityCards.map((card) => (
-              <div key={card.label} className={`rounded-xl p-5 border ${colorMap[card.color]}`}>
+              <div
+                key={card.label}
+                className={`rounded-xl p-5 border cursor-pointer hover:scale-[1.02] transition-transform ${colorMap[card.color]}`}
+                onClick={() =>
+                  setSelectedMetric({
+                    key: card.key,
+                    label: card.label,
+                    color: card.color,
+                    stroke: METRIC_CONFIG[card.key].stroke,
+                  })
+                }
+              >
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-xs font-medium uppercase tracking-wider opacity-70">{card.label}</span>
                   <span className="text-lg">{card.icon}</span>
@@ -498,6 +740,10 @@ export default function DashboardPage() {
         <div className="bg-gray-900/30 border border-gray-800/40 rounded-xl p-8 text-center">
           <p className="text-gray-500 text-sm">No analytics data yet. Data appears after the first day of activity.</p>
         </div>
+      )}
+
+      {selectedMetric && (
+        <MetricModal metric={selectedMetric} onClose={() => setSelectedMetric(null)} />
       )}
     </div>
   );
