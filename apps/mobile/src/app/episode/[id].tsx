@@ -28,6 +28,7 @@ export default function EpisodeScreen() {
 
   const [showUnlockModal, setShowUnlockModal] = useState(false);
   const [playbackUrl, setPlaybackUrl] = useState<string | null>(null);
+  const [playbackError, setPlaybackError] = useState<string | null>(null);
   const playbackRequested = useRef(false);
 
   // Autoplay state
@@ -85,14 +86,18 @@ export default function EpisodeScreen() {
 
     api.getPlaybackUrl(id).then(({ playbackUrl: url }) => {
       setPlaybackUrl(url);
+      setPlaybackError(null);
       if (episode) analytics.playbackStart(id, episode.seriesId);
-    }).catch(() => {});
+    }).catch((err) => {
+      setPlaybackError(err?.message ?? 'Failed to load video');
+    });
   }, [entitlement?.entitled, id, episode]);
 
   // Reset state when episode changes
   useEffect(() => {
     playbackRequested.current = false;
     setPlaybackUrl(null);
+    setPlaybackError(null);
     setShowAutoplay(false);
     setAutoplayCountdown(AUTOPLAY_SECONDS);
     if (autoplayTimerRef.current) {
@@ -228,8 +233,29 @@ export default function EpisodeScreen() {
         />
       ) : isEntitled && !playbackUrl ? (
         <View style={[styles.container, styles.center]}>
-          <ActivityIndicator color="#a855f7" size="large" />
-          <Text style={styles.loadingText}>Loading video...</Text>
+          <TouchableOpacity onPress={() => router.back()} style={styles.closeButton}>
+            <Ionicons name="close" size={22} color="#ffffff" />
+          </TouchableOpacity>
+          {playbackError ? (
+            <>
+              <Ionicons name="alert-circle-outline" size={48} color="#ef4444" />
+              <Text style={styles.loadingText}>{playbackError}</Text>
+              <TouchableOpacity
+                style={styles.retryButton}
+                onPress={() => {
+                  playbackRequested.current = false;
+                  setPlaybackError(null);
+                }}
+              >
+                <Text style={styles.retryText}>Retry</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <ActivityIndicator color="#a855f7" size="large" />
+              <Text style={styles.loadingText}>Loading video...</Text>
+            </>
+          )}
         </View>
       ) : (
         <View style={[styles.container, styles.center, { paddingHorizontal: 32 }]}>
@@ -345,6 +371,20 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     fontSize: 14,
     marginTop: 12,
+    textAlign: 'center',
+    paddingHorizontal: 32,
+  },
+  retryButton: {
+    marginTop: 16,
+    backgroundColor: '#7c3aed',
+    borderRadius: 10,
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+  },
+  retryText: {
+    color: '#ffffff',
+    fontWeight: '600',
+    fontSize: 14,
   },
   lockedTitle: {
     color: '#ffffff',

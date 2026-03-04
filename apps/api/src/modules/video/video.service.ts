@@ -164,11 +164,15 @@ export class VideoService {
         expiresInSeconds,
       );
     } else {
-      playbackUrl = await this.gcs.generateDownloadSignedUrl(
-        asset.gcsBucket,
-        asset.gcsObjectKey,
-        expiresInSeconds,
-      );
+      try {
+        playbackUrl = await this.gcs.generateDownloadSignedUrl(
+          asset.gcsBucket,
+          asset.gcsObjectKey,
+          expiresInSeconds,
+        );
+      } catch {
+        playbackUrl = `https://storage.googleapis.com/${asset.gcsBucket}/${asset.gcsObjectKey}`;
+      }
     }
 
     const expiresAt = new Date(Date.now() + expiresInSeconds * 1000).toISOString();
