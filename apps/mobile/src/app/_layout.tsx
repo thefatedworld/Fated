@@ -143,7 +143,7 @@ export default function RootLayout() {
               headerTintColor: '#ffffff',
             }}
           />
-          <Stack.Screen name="episode/[id]" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
+          <Stack.Screen name="episode/[id]" options={{ headerShown: false, presentation: 'fullScreenModal', animation: 'fade' }} />
           <Stack.Screen name="store" options={{ headerShown: false, presentation: 'modal' }} />
         </Stack>
         <StatusBar style="light" />
