@@ -9,12 +9,13 @@ import {
   Dimensions,
   Animated,
 } from 'react-native';
-import { Video, AVPlaybackStatus, ResizeMode } from 'expo-av';
+import { Video, Audio, AVPlaybackStatus, ResizeMode } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const PROGRESS_INTERVAL_MS = 10_000;
+const AUTO_HIDE_MS = 2000;
 
 export interface EpisodeMeta {
   id: string;
@@ -55,6 +56,7 @@ export default function VideoPlayer({
   const startTimeRef = useRef(Date.now());
   const lastProgressReportRef = useRef(0);
   const fadeAnim = useRef(new Animated.Value(1)).current;
+  const wasPlayingRef = useRef(false);
 
   const isLoaded = status?.isLoaded ?? false;
   const isPlaying = isLoaded && (status as any).isPlaying;
@@ -62,6 +64,13 @@ export default function VideoPlayer({
   const duration = isLoaded ? (status as any).durationMillis ?? 0 : 0;
   const position = isLoaded ? (status as any).positionMillis ?? 0 : 0;
   const didFinish = isLoaded && (status as any).didJustFinish;
+
+  useEffect(() => {
+    Audio.setAudioModeAsync({
+      playsInSilentModeIOS: true,
+      staysActiveInBackground: false,
+    });
+  }, []);
 
   const showControls = useCallback(() => {
     setControlsVisible(true);
@@ -82,8 +91,15 @@ export default function VideoPlayer({
 
   const scheduleHide = useCallback(() => {
     if (controlsTimerRef.current) clearTimeout(controlsTimerRef.current);
-    controlsTimerRef.current = setTimeout(hideControls, 3000);
+    controlsTimerRef.current = setTimeout(hideControls, AUTO_HIDE_MS);
   }, [hideControls]);
+
+  useEffect(() => {
+    if (isPlaying && !wasPlayingRef.current) {
+      scheduleHide();
+    }
+    wasPlayingRef.current = isPlaying;
+  }, [isPlaying, scheduleHide]);
 
   function handleScreenTap() {
     if (controlsVisible) {
@@ -126,7 +142,6 @@ export default function VideoPlayer({
   }
 
   useEffect(() => {
-    if (isPlaying && controlsVisible) scheduleHide();
     return () => {
       if (controlsTimerRef.current) clearTimeout(controlsTimerRef.current);
     };
@@ -168,12 +183,10 @@ export default function VideoPlayer({
 
           {controlsVisible && (
             <Animated.View style={[StyleSheet.absoluteFill, { opacity: fadeAnim }]}>
-              {/* Close button */}
               <TouchableOpacity onPress={onClose} style={styles.closeButton}>
                 <Ionicons name="close" size={22} color="#ffffff" />
               </TouchableOpacity>
 
-              {/* Center play/pause */}
               <View style={styles.centerControls}>
                 {hasPrev && (
                   <TouchableOpacity onPress={onPrev} style={styles.skipButton} activeOpacity={0.7}>
@@ -190,7 +203,6 @@ export default function VideoPlayer({
                 )}
               </View>
 
-              {/* Bottom overlay with gradient */}
               <LinearGradient
                 colors={['transparent', 'rgba(0,0,0,0.7)', 'rgba(0,0,0,0.9)']}
                 style={styles.bottomOverlay}
@@ -205,7 +217,6 @@ export default function VideoPlayer({
                   )}
                 </View>
 
-                {/* Navigation row */}
                 <View style={styles.navRow}>
                   <TouchableOpacity
                     onPress={onPrev}
@@ -232,7 +243,6 @@ export default function VideoPlayer({
                   </TouchableOpacity>
                 </View>
 
-                {/* Progress bar */}
                 <View style={styles.progressContainer}>
                   <View style={styles.progressTrack}>
                     <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />

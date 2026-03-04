@@ -10,22 +10,20 @@ import Animated, {
   useAnimatedStyle,
   withTiming,
   withDelay,
-  withRepeat,
   runOnJS,
   Easing,
-  useDerivedValue,
 } from 'react-native-reanimated';
 import { initAuthClient } from '@/lib/auth';
 import { useAuthStore } from '@/store/auth.store';
+import EmberField from '@/components/EmberField';
 import '../global.css';
 
 SplashScreen.preventAutoHideAsync();
 initAuthClient();
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
-const ICON_SIZE = SCREEN_W * 0.42;
-const ORBIT_RADIUS = SCREEN_W * 0.24;
-const TRAIL_COUNT = 10;
+const LOGO_WIDTH = SCREEN_W * 0.72;
+const LOGO_HEIGHT = LOGO_WIDTH * (258 / 723);
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -45,156 +43,45 @@ Notifications.setNotificationHandler({
 });
 
 function AnimatedSplash({ onFinish }: { onFinish: () => void }) {
-  const iconOpacity = useSharedValue(0);
-  const iconScale = useSharedValue(0.88);
-  const cometAngle = useSharedValue(-Math.PI / 2);
-  const cometOpacity = useSharedValue(0);
-  const glowOpacity = useSharedValue(0);
+  const logoOpacity = useSharedValue(0);
   const containerOpacity = useSharedValue(1);
-  const starfieldOpacity = useSharedValue(0);
 
   useEffect(() => {
     SplashScreen.hideAsync();
 
-    // Fade in starfield background
-    starfieldOpacity.value = withTiming(0.35, { duration: 600 });
-
-    // Start comet orbiting (1.5 rotations over 2.4s)
-    cometOpacity.value = withDelay(300, withTiming(1, { duration: 300 }));
-    cometAngle.value = withDelay(300,
-      withTiming(-Math.PI / 2 + Math.PI * 3, {
-        duration: 2400,
-        easing: Easing.inOut(Easing.cubic),
-      }),
-    );
-
-    // Glow follows comet
-    glowOpacity.value = withDelay(400, withTiming(0.5, { duration: 400 }));
-
-    // Logo fades in after first quarter orbit
-    iconOpacity.value = withDelay(700, withTiming(1, {
-      duration: 600,
+    // Fade in text logo over ~1s
+    logoOpacity.value = withTiming(1, {
+      duration: 1000,
       easing: Easing.out(Easing.cubic),
-    }));
-    iconScale.value = withDelay(700, withTiming(1, {
-      duration: 700,
-      easing: Easing.out(Easing.cubic),
-    }));
+    });
 
-    // Fade out comet near end
-    cometOpacity.value = withDelay(2200, withTiming(0, { duration: 500 }));
-    glowOpacity.value = withDelay(2200, withTiming(0, { duration: 500 }));
-
-    // Fade out everything
-    containerOpacity.value = withDelay(2800, withTiming(0, { duration: 500 }, (finished) => {
+    // After one ember orbit (~8s), fade out and finish
+    containerOpacity.value = withDelay(8000, withTiming(0, { duration: 600 }, (finished) => {
       if (finished) runOnJS(onFinish)();
     }));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const cometX = useDerivedValue(() => Math.cos(cometAngle.value) * ORBIT_RADIUS);
-  const cometY = useDerivedValue(() => Math.sin(cometAngle.value) * ORBIT_RADIUS);
-
-  const iconAnimStyle = useAnimatedStyle(() => ({
-    opacity: iconOpacity.value,
-    transform: [{ scale: iconScale.value }],
+  const logoAnimStyle = useAnimatedStyle(() => ({
+    opacity: logoOpacity.value,
   }));
 
   const containerAnimStyle = useAnimatedStyle(() => ({
     opacity: containerOpacity.value,
   }));
 
-  const starfieldAnimStyle = useAnimatedStyle(() => ({
-    opacity: starfieldOpacity.value,
-  }));
-
-  // Directional glow that follows the comet
-  const glowAnimStyle = useAnimatedStyle(() => ({
-    opacity: glowOpacity.value * cometOpacity.value,
-    transform: [
-      { translateX: cometX.value * 0.5 },
-      { translateY: cometY.value * 0.5 },
-    ],
-  }));
-
-  // Generate trail configs (each one is slightly behind the lead)
-  const trailElements = [];
-  for (let i = 0; i < TRAIL_COUNT; i++) {
-    trailElements.push(
-      <CometTrailDot
-        key={i}
-        index={i}
-        cometAngle={cometAngle}
-        cometOpacity={cometOpacity}
-      />,
-    );
-  }
-
   return (
     <Animated.View style={[splashStyles.container, containerAnimStyle]}>
-      {/* Starfield background */}
-      <Animated.View style={[splashStyles.starfieldWrap, starfieldAnimStyle]}>
+      <EmberField count={72} centerY={SCREEN_H * 0.42} />
+
+      <Animated.View style={[splashStyles.logoWrap, logoAnimStyle]}>
         <Image
-          source={require('../../assets/icon.png')}
-          style={splashStyles.starfield}
-          resizeMode="cover"
-        />
-      </Animated.View>
-
-      {/* Directional glow */}
-      <Animated.View style={[splashStyles.glow, glowAnimStyle]} />
-
-      {/* Comet trail */}
-      {trailElements}
-
-      {/* Logo */}
-      <Animated.View style={[splashStyles.iconWrap, iconAnimStyle]}>
-        <Image
-          source={require('../../assets/icon.png')}
-          style={splashStyles.icon}
+          source={require('../../assets/fated-text-logo.png')}
+          style={splashStyles.logo}
           resizeMode="contain"
         />
       </Animated.View>
     </Animated.View>
   );
-}
-
-function CometTrailDot({
-  index,
-  cometAngle,
-  cometOpacity,
-}: {
-  index: number;
-  cometAngle: Animated.SharedValue<number>;
-  cometOpacity: Animated.SharedValue<number>;
-}) {
-  const angleOffset = index * 0.12;
-  const opacityFactor = 1 - index / TRAIL_COUNT;
-  const sizeFactor = 1 - index * 0.07;
-  const baseSize = 8;
-
-  const animStyle = useAnimatedStyle(() => {
-    'worklet';
-    const angle = cometAngle.value - angleOffset;
-    const x = Math.cos(angle) * ORBIT_RADIUS;
-    const y = Math.sin(angle) * ORBIT_RADIUS;
-    const size = baseSize * sizeFactor;
-    return {
-      position: 'absolute',
-      left: SCREEN_W / 2 - size / 2 + x,
-      top: SCREEN_H / 2 - size / 2 + y,
-      width: size,
-      height: size,
-      borderRadius: size / 2,
-      backgroundColor: index === 0 ? '#fff8e1' : '#d4af37',
-      opacity: cometOpacity.value * opacityFactor * (index === 0 ? 1 : 0.7),
-      shadowColor: index === 0 ? '#ffffff' : '#d4af37',
-      shadowOffset: { width: 0, height: 0 },
-      shadowOpacity: index === 0 ? 1 : 0.6,
-      shadowRadius: index === 0 ? 20 : 10 * opacityFactor,
-    };
-  });
-
-  return <Animated.View style={animStyle} />;
 }
 
 function AuthGate({ children }: { children: React.ReactNode }) {
@@ -231,39 +118,17 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 const splashStyles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: '#030712',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  starfieldWrap: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  starfield: {
-    width: SCREEN_W,
-    height: SCREEN_H,
-  },
-  iconWrap: {
-    width: ICON_SIZE,
-    height: ICON_SIZE,
-    borderRadius: ICON_SIZE * 0.22,
-    overflow: 'hidden',
+  logoWrap: {
     zIndex: 10,
+    alignItems: 'center',
   },
-  icon: {
-    width: '100%',
-    height: '100%',
-  },
-  glow: {
-    position: 'absolute',
-    width: ICON_SIZE * 1.8,
-    height: ICON_SIZE * 1.8,
-    borderRadius: ICON_SIZE * 0.9,
-    backgroundColor: 'rgba(212,175,55,0.08)',
-    shadowColor: '#d4af37',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 60,
-    zIndex: 5,
+  logo: {
+    width: LOGO_WIDTH,
+    height: LOGO_HEIGHT,
   },
 });
 
