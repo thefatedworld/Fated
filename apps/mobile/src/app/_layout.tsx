@@ -83,6 +83,56 @@ export default function RootLayout() {
               headerTintColor: '#ffffff',
             }}
           />
+          <Stack.Screen
+            name="community/[seriesId]"
+            options={{
+              headerShown: true,
+              headerTitle: 'Community',
+              headerBackTitle: 'Back',
+              headerStyle: { backgroundColor: '#030712' },
+              headerTintColor: '#ffffff',
+            }}
+          />
+          <Stack.Screen
+            name="community/thread/[id]"
+            options={{
+              headerShown: true,
+              headerTitle: 'Thread',
+              headerBackTitle: 'Back',
+              headerStyle: { backgroundColor: '#030712' },
+              headerTintColor: '#ffffff',
+            }}
+          />
+          <Stack.Screen
+            name="community/new-thread"
+            options={{
+              headerShown: true,
+              headerTitle: 'New Thread',
+              headerBackTitle: 'Back',
+              headerStyle: { backgroundColor: '#030712' },
+              headerTintColor: '#ffffff',
+            }}
+          />
+          <Stack.Screen
+            name="wiki/[seriesId]"
+            options={{
+              headerShown: true,
+              headerTitle: 'Wiki',
+              headerBackTitle: 'Back',
+              headerStyle: { backgroundColor: '#030712' },
+              headerTintColor: '#ffffff',
+            }}
+          />
+          <Stack.Screen
+            name="wiki/page/[slug]"
+            options={{
+              headerShown: true,
+              headerTitle: 'Wiki',
+              headerBackTitle: 'Back',
+              headerStyle: { backgroundColor: '#030712' },
+              headerTintColor: '#ffffff',
+            }}
+          />
           <Stack.Screen name="episode/[id]" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
           <Stack.Screen name="store" options={{ headerShown: false, presentation: 'modal' }} />
         </Stack>

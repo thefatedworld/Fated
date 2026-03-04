@@ -126,4 +126,137 @@ export class AnalyticsService {
 
     return snapshots;
   }
+
+  /**
+   * Admin: community engagement + wiki + moderation stats for a time range.
+   */
+  async getCommunityStats(days = 7) {
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+
+    const priorStart = new Date(since);
+    priorStart.setDate(priorStart.getDate() - days);
+
+    const [
+      threadsCreated,
+      threadsCreatedPrior,
+      repliesPosted,
+      repliesPostedPrior,
+      communityVotes,
+      communityVotesPrior,
+      wikiEditsSubmitted,
+      wikiEditsSubmittedPrior,
+      wikiEditsApproved,
+      wikiEditsRejected,
+      wikiEditsPending,
+      wikiPagesCreated,
+      openReports,
+      underReviewReports,
+      topThreads,
+    ] = await Promise.all([
+      this.prisma.thread.count({ where: { createdAt: { gte: since }, isDeleted: false } }),
+      this.prisma.thread.count({ where: { createdAt: { gte: priorStart, lt: since }, isDeleted: false } }),
+      this.prisma.threadReply.count({ where: { createdAt: { gte: since }, isDeleted: false } }),
+      this.prisma.threadReply.count({ where: { createdAt: { gte: priorStart, lt: since }, isDeleted: false } }),
+      this.prisma.vote.count({ where: { createdAt: { gte: since } } }),
+      this.prisma.vote.count({ where: { createdAt: { gte: priorStart, lt: since } } }),
+      this.prisma.wikiRevision.count({ where: { createdAt: { gte: since } } }),
+      this.prisma.wikiRevision.count({ where: { createdAt: { gte: priorStart, lt: since } } }),
+      this.prisma.wikiRevision.count({ where: { createdAt: { gte: since }, status: 'approved' } }),
+      this.prisma.wikiRevision.count({ where: { createdAt: { gte: since }, status: 'rejected' } }),
+      this.prisma.wikiRevision.count({ where: { status: 'pending' } }),
+      this.prisma.wikiPage.count({ where: { createdAt: { gte: since } } }),
+      this.prisma.abuseReport.count({ where: { status: 'open' } }),
+      this.prisma.abuseReport.count({ where: { status: 'under_review' } }),
+      this.prisma.thread.findMany({
+        where: { createdAt: { gte: since }, isDeleted: false },
+        orderBy: { voteCount: 'desc' },
+        take: 5,
+        include: {
+          series: { select: { id: true, title: true } },
+          _count: { select: { replies: true } },
+        },
+      }),
+    ]);
+
+    return {
+      community: {
+        threadsCreated,
+        threadsCreatedPrior,
+        repliesPosted,
+        repliesPostedPrior,
+        communityVotes,
+        communityVotesPrior,
+        wikiEditsSubmitted,
+        wikiEditsSubmittedPrior,
+      },
+      wiki: {
+        pagesCreated: wikiPagesCreated,
+        editsApproved: wikiEditsApproved,
+        editsRejected: wikiEditsRejected,
+        editsPending: wikiEditsPending,
+      },
+      moderation: {
+        openReports,
+        underReviewReports,
+      },
+      topThreads: topThreads.map((t) => ({
+        id: t.id,
+        title: t.title,
+        seriesTitle: t.series?.title ?? null,
+        seriesId: t.series?.id ?? null,
+        voteCount: t.voteCount,
+        replyCount: t._count.replies,
+        createdAt: t.createdAt,
+      })),
+    };
+  }
+
+  /**
+   * Admin: trending series ranked by views in the period.
+   */
+  async getTrendingSeries(days = 7) {
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+
+    const snapshots = await this.prisma.analyticsDailySnapshot.findMany({
+      where: { seriesId: { not: null }, date: { gte: since } },
+    });
+
+    const seriesMap = new Map<string, { views: number; unlocks: number; watchMinutes: number }>();
+    for (const s of snapshots) {
+      const id = s.seriesId!;
+      const existing = seriesMap.get(id) ?? { views: 0, unlocks: 0, watchMinutes: 0 };
+      existing.views += s.totalViews;
+      existing.unlocks += s.unlocks;
+      existing.watchMinutes += Number(s.totalWatchMinutes);
+      seriesMap.set(id, existing);
+    }
+
+    const ranked = Array.from(seriesMap.entries())
+      .map(([seriesId, stats]) => ({ seriesId, ...stats }))
+      .sort((a, b) => b.views - a.views)
+      .slice(0, 5);
+
+    if (ranked.length === 0) return [];
+
+    const seriesDetails = await this.prisma.series.findMany({
+      where: { id: { in: ranked.map((r) => r.seriesId) } },
+      select: { id: true, title: true, genreTags: true, coverImageUrl: true },
+    });
+
+    const detailMap = new Map(seriesDetails.map((s) => [s.id, s]));
+
+    return ranked.map((r) => {
+      const detail = detailMap.get(r.seriesId);
+      return {
+        seriesId: r.seriesId,
+        title: detail?.title ?? 'Unknown',
+        genreTags: detail?.genreTags ?? [],
+        views: r.views,
+        unlocks: r.unlocks,
+        watchMinutes: r.watchMinutes,
+      };
+    });
+  }
 }

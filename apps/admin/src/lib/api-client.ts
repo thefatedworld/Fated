@@ -95,6 +95,10 @@ export const adminApi = {
   // Analytics
   getPlatformSnapshot: (token: string, days?: number) =>
     apiFetch(`/v1/admin/analytics/platform${days ? `?days=${days}` : ''}`, { token }),
+  getCommunityStats: (token: string, days?: number) =>
+    apiFetch<CommunityStats>(`/v1/admin/analytics/community${days ? `?days=${days}` : ''}`, { token }),
+  getTrendingSeries: (token: string, days?: number) =>
+    apiFetch<TrendingSeries[]>(`/v1/admin/analytics/trending${days ? `?days=${days}` : ''}`, { token }),
 
   // Audit log
   getAuditLog: (token: string, params?: Record<string, string>) => {
@@ -247,4 +251,45 @@ export interface Season {
   arcLabel?: string;
   sortOrder: number;
   createdAt: string;
+}
+
+export interface CommunityStats {
+  community: {
+    threadsCreated: number;
+    threadsCreatedPrior: number;
+    repliesPosted: number;
+    repliesPostedPrior: number;
+    communityVotes: number;
+    communityVotesPrior: number;
+    wikiEditsSubmitted: number;
+    wikiEditsSubmittedPrior: number;
+  };
+  wiki: {
+    pagesCreated: number;
+    editsApproved: number;
+    editsRejected: number;
+    editsPending: number;
+  };
+  moderation: {
+    openReports: number;
+    underReviewReports: number;
+  };
+  topThreads: {
+    id: string;
+    title: string;
+    seriesTitle: string | null;
+    seriesId: string | null;
+    voteCount: number;
+    replyCount: number;
+    createdAt: string;
+  }[];
+}
+
+export interface TrendingSeries {
+  seriesId: string;
+  title: string;
+  genreTags: string[];
+  views: number;
+  unlocks: number;
+  watchMinutes: number;
 }

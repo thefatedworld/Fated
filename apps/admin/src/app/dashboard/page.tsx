@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { adminApi, type Series } from '@/lib/api-client';
+import { adminApi, type Series, type CommunityStats, type TrendingSeries } from '@/lib/api-client';
 import { getToken } from '@/lib/utils';
 
 interface PlatformSnapshot {
@@ -14,19 +14,17 @@ interface PlatformSnapshot {
   unlocks: number;
 }
 
-const STAT_CARDS = [
-  { key: 'views', label: 'Total Views', icon: '▶', color: 'purple' },
-  { key: 'users', label: 'New Users', icon: '◎', color: 'blue' },
-  { key: 'tokens', label: 'Tokens Sold', icon: '⬡', color: 'amber' },
-  { key: 'unlocks', label: 'Unlocks', icon: '↗', color: 'green' },
-] as const;
-
 function MiniBarChart({ data, maxVal, color }: { data: number[]; maxVal: number; color: string }) {
   const barColor = {
     purple: 'bg-purple-500',
     blue: 'bg-blue-500',
     amber: 'bg-amber-500',
     green: 'bg-green-500',
+    rose: 'bg-rose-500',
+    cyan: 'bg-cyan-500',
+    orange: 'bg-orange-500',
+    indigo: 'bg-indigo-500',
+    teal: 'bg-teal-500',
   }[color] ?? 'bg-purple-500';
 
   return (
@@ -46,10 +44,33 @@ function MiniBarChart({ data, maxVal, color }: { data: number[]; maxVal: number;
   );
 }
 
+function DeltaBadge({ current, prior }: { current: number; prior: number }) {
+  if (prior === 0 && current === 0) return null;
+  const pct = prior === 0 ? (current > 0 ? 100 : 0) : Math.round(((current - prior) / prior) * 100);
+  if (pct === 0) return <span className="text-[10px] text-gray-500 ml-1">--</span>;
+  const isUp = pct > 0;
+  return (
+    <span className={`text-[10px] font-medium ml-2 ${isUp ? 'text-green-400' : 'text-red-400'}`}>
+      {isUp ? '↑' : '↓'} {Math.abs(pct)}%
+    </span>
+  );
+}
+
+function SparkBar({ value, maxVal }: { value: number; maxVal: number }) {
+  const pct = maxVal > 0 ? Math.max((value / maxVal) * 100, 2) : 2;
+  return (
+    <div className="w-24 h-2 bg-gray-800 rounded-full overflow-hidden">
+      <div className="h-full bg-purple-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const [snapshots, setSnapshots] = useState<PlatformSnapshot[]>([]);
   const [seriesList, setSeriesList] = useState<Series[]>([]);
+  const [communityStats, setCommunityStats] = useState<CommunityStats | null>(null);
+  const [trendingSeries, setTrendingSeries] = useState<TrendingSeries[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [daysRange, setDaysRange] = useState(7);
@@ -64,12 +85,16 @@ export default function DashboardPage() {
     setLoading(true);
 
     try {
-      const [data, series] = await Promise.all([
+      const [data, series, community, trending] = await Promise.all([
         adminApi.getPlatformSnapshot(token, daysRange),
         adminApi.listSeries(token),
+        adminApi.getCommunityStats(token, daysRange).catch(() => null),
+        adminApi.getTrendingSeries(token, daysRange).catch(() => []),
       ]);
       setSnapshots(data as PlatformSnapshot[]);
       setSeriesList(series);
+      setCommunityStats(community);
+      setTrendingSeries(trending);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes('401') || msg.includes('Unauthorized')) {
@@ -87,14 +112,55 @@ export default function DashboardPage() {
       users: acc.users + s.newUsers,
       tokens: acc.tokens + Number(s.tokensSold || 0),
       unlocks: acc.unlocks + s.unlocks,
+      watchMinutes: acc.watchMinutes + Number(s.totalWatchMinutes || 0),
     }),
-    { views: 0, users: 0, tokens: 0, unlocks: 0 },
+    { views: 0, users: 0, tokens: 0, unlocks: 0, watchMinutes: 0 },
   );
+
+  const halfIdx = Math.floor(snapshots.length / 2);
+  const priorHalf = snapshots.slice(halfIdx);
+  const recentHalf = snapshots.slice(0, halfIdx || snapshots.length);
+  const sum = (arr: PlatformSnapshot[], fn: (s: PlatformSnapshot) => number) => arr.reduce((a, s) => a + fn(s), 0);
+  const priorTotals = {
+    views: sum(priorHalf, (s) => s.totalViews),
+    users: sum(priorHalf, (s) => s.newUsers),
+    tokens: sum(priorHalf, (s) => Number(s.tokensSold || 0)),
+    unlocks: sum(priorHalf, (s) => s.unlocks),
+    watchMinutes: sum(priorHalf, (s) => Number(s.totalWatchMinutes || 0)),
+  };
+  const recentTotals = {
+    views: sum(recentHalf, (s) => s.totalViews),
+    users: sum(recentHalf, (s) => s.newUsers),
+    tokens: sum(recentHalf, (s) => Number(s.tokensSold || 0)),
+    unlocks: sum(recentHalf, (s) => s.unlocks),
+    watchMinutes: sum(recentHalf, (s) => Number(s.totalWatchMinutes || 0)),
+  };
 
   const dailyViews = snapshots.map((s) => s.totalViews);
   const dailyUsers = snapshots.map((s) => s.newUsers);
   const dailyTokens = snapshots.map((s) => Number(s.tokensSold || 0));
   const dailyUnlocks = snapshots.map((s) => s.unlocks);
+  const dailyWatch = snapshots.map((s) => Number(s.totalWatchMinutes || 0));
+
+  const STAT_CARDS = [
+    { key: 'views' as const, label: 'Total Views', icon: '▶', color: 'purple', value: totals.views, prior: priorTotals.views, recent: recentTotals.views, daily: dailyViews },
+    { key: 'users' as const, label: 'New Users', icon: '◎', color: 'blue', value: totals.users, prior: priorTotals.users, recent: recentTotals.users, daily: dailyUsers },
+    { key: 'tokens' as const, label: 'Tokens Sold', icon: '⬡', color: 'amber', value: totals.tokens, prior: priorTotals.tokens, recent: recentTotals.tokens, daily: dailyTokens },
+    { key: 'unlocks' as const, label: 'Unlocks', icon: '↗', color: 'green', value: totals.unlocks, prior: priorTotals.unlocks, recent: recentTotals.unlocks, daily: dailyUnlocks },
+    { key: 'watchMinutes' as const, label: 'Watch Time', icon: '⏱', color: 'teal', value: totals.watchMinutes, prior: priorTotals.watchMinutes, recent: recentTotals.watchMinutes, daily: dailyWatch, suffix: 'm' },
+  ];
+
+  const colorMap: Record<string, string> = {
+    purple: 'bg-purple-600/10 text-purple-400 border-purple-500/10',
+    blue: 'bg-blue-600/10 text-blue-400 border-blue-500/10',
+    amber: 'bg-amber-600/10 text-amber-400 border-amber-500/10',
+    green: 'bg-green-600/10 text-green-400 border-green-500/10',
+    teal: 'bg-teal-600/10 text-teal-400 border-teal-500/10',
+    rose: 'bg-rose-600/10 text-rose-400 border-rose-500/10',
+    cyan: 'bg-cyan-600/10 text-cyan-400 border-cyan-500/10',
+    orange: 'bg-orange-600/10 text-orange-400 border-orange-500/10',
+    indigo: 'bg-indigo-600/10 text-indigo-400 border-indigo-500/10',
+  };
 
   if (loading) {
     return (
@@ -104,8 +170,19 @@ export default function DashboardPage() {
     );
   }
 
+  const cs = communityStats;
+  const communityCards = cs ? [
+    { label: 'Threads Created', icon: '💬', color: 'rose', value: cs.community.threadsCreated, prior: cs.community.threadsCreatedPrior },
+    { label: 'Replies Posted', icon: '↩', color: 'cyan', value: cs.community.repliesPosted, prior: cs.community.repliesPostedPrior },
+    { label: 'Community Votes', icon: '⬆', color: 'orange', value: cs.community.communityVotes, prior: cs.community.communityVotesPrior },
+    { label: 'Wiki Edits', icon: '📝', color: 'indigo', value: cs.community.wikiEditsSubmitted, prior: cs.community.wikiEditsSubmittedPrior },
+  ] : [];
+
+  const maxTrendingViews = Math.max(...trendingSeries.map((s) => s.views), 1);
+
   return (
     <div>
+      {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold text-white">Dashboard</h1>
@@ -134,32 +211,48 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Stat cards with mini charts */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      {/* Platform KPI cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
         {STAT_CARDS.map((card) => {
-          const value = totals[card.key];
-          const daily = { views: dailyViews, users: dailyUsers, tokens: dailyTokens, unlocks: dailyUnlocks }[card.key];
-          const maxVal = Math.max(...(daily || [0]));
-          const colorMap = {
-            purple: 'bg-purple-600/10 text-purple-400 border-purple-500/10',
-            blue: 'bg-blue-600/10 text-blue-400 border-blue-500/10',
-            amber: 'bg-amber-600/10 text-amber-400 border-amber-500/10',
-            green: 'bg-green-600/10 text-green-400 border-green-500/10',
-          };
+          const maxVal = Math.max(...(card.daily || [0]));
           return (
             <div key={card.key} className={`rounded-xl p-5 border ${colorMap[card.color]}`}>
               <div className="flex items-center justify-between mb-1">
                 <span className="text-xs font-medium uppercase tracking-wider opacity-70">{card.label}</span>
                 <span className="text-lg">{card.icon}</span>
               </div>
-              <p className="text-2xl font-bold">{value.toLocaleString()}</p>
-              {daily && daily.length > 1 && (
-                <MiniBarChart data={daily} maxVal={maxVal} color={card.color} />
+              <div className="flex items-baseline">
+                <p className="text-2xl font-bold">{card.value.toLocaleString()}{'suffix' in card ? card.suffix : ''}</p>
+                <DeltaBadge current={card.recent} prior={card.prior} />
+              </div>
+              {card.daily && card.daily.length > 1 && (
+                <MiniBarChart data={card.daily} maxVal={maxVal} color={card.color} />
               )}
             </div>
           );
         })}
       </div>
+
+      {/* Community Engagement cards */}
+      {communityCards.length > 0 && (
+        <>
+          <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Community Engagement</h2>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            {communityCards.map((card) => (
+              <div key={card.label} className={`rounded-xl p-5 border ${colorMap[card.color]}`}>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-medium uppercase tracking-wider opacity-70">{card.label}</span>
+                  <span className="text-lg">{card.icon}</span>
+                </div>
+                <div className="flex items-baseline">
+                  <p className="text-2xl font-bold">{card.value.toLocaleString()}</p>
+                  <DeltaBadge current={card.value} prior={card.prior} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
 
       {/* Daily breakdown table */}
       {snapshots.length > 0 && (
@@ -196,96 +289,206 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {/* Trending Series + Top Community Posts */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-        {/* Series overview */}
+        {/* Trending Series */}
         <div className="bg-gray-900/50 border border-gray-800/60 rounded-xl p-5">
-          <h3 className="text-sm font-semibold text-white mb-4">Series Overview</h3>
-          {seriesList.length === 0 ? (
-            <p className="text-gray-500 text-sm">No series yet.</p>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-white">Trending Series</h3>
+            <span className="text-[10px] text-gray-500 uppercase tracking-wider">Last {daysRange}d</span>
+          </div>
+          {trendingSeries.length === 0 ? (
+            <p className="text-gray-500 text-sm">No trending data yet.</p>
           ) : (
             <div className="space-y-3">
-              {seriesList.slice(0, 8).map((s) => (
+              {trendingSeries.map((s, i) => (
                 <a
-                  key={s.id}
-                  href={`/dashboard/series/${s.id}`}
-                  className="flex items-center justify-between group"
+                  key={s.seriesId}
+                  href={`/dashboard/series/${s.seriesId}`}
+                  className="flex items-center gap-3 group"
                 >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-8 h-8 rounded-lg bg-purple-600/15 border border-purple-500/20 flex items-center justify-center flex-shrink-0">
-                      <span className="text-purple-400 text-xs font-bold">
-                        {s.title[0].toUpperCase()}
-                      </span>
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm text-white group-hover:text-purple-400 transition-colors truncate">
-                        {s.title}
-                      </p>
-                      <div className="flex gap-1.5 mt-0.5">
-                        {s.genreTags?.slice(0, 2).map((t) => (
-                          <span key={t} className="text-[10px] text-gray-500">{t}</span>
-                        ))}
-                      </div>
+                  <span className="text-lg font-bold text-gray-600 w-6 text-right">{i + 1}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-white group-hover:text-purple-400 transition-colors truncate">
+                      {s.title}
+                    </p>
+                    <div className="flex items-center gap-3 mt-1">
+                      <span className="text-[10px] text-gray-500">{s.views.toLocaleString()} views</span>
+                      <span className="text-[10px] text-gray-500">{s.unlocks.toLocaleString()} unlocks</span>
                     </div>
                   </div>
-                  <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${
-                    s.status === 'published'
-                      ? 'bg-green-600/10 text-green-400'
-                      : 'bg-gray-800 text-gray-400'
-                  }`}>
-                    {s.status}
-                  </span>
+                  <SparkBar value={s.views} maxVal={maxTrendingViews} />
                 </a>
               ))}
             </div>
           )}
+          {trendingSeries.length === 0 && seriesList.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-gray-800/40">
+              <p className="text-[11px] text-gray-600">Showing all series as fallback:</p>
+              <div className="space-y-2 mt-2">
+                {seriesList.slice(0, 5).map((s) => (
+                  <a key={s.id} href={`/dashboard/series/${s.id}`} className="flex items-center gap-3 group">
+                    <div className="w-7 h-7 rounded-lg bg-purple-600/15 border border-purple-500/20 flex items-center justify-center flex-shrink-0">
+                      <span className="text-purple-400 text-[10px] font-bold">{s.title[0]}</span>
+                    </div>
+                    <p className="text-sm text-gray-300 group-hover:text-purple-400 transition-colors truncate">{s.title}</p>
+                    <span className={`ml-auto px-2 py-0.5 rounded text-[10px] font-medium ${
+                      s.status === 'published' ? 'bg-green-600/10 text-green-400' : 'bg-gray-800 text-gray-400'
+                    }`}>{s.status}</span>
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Quick actions + status */}
-        <div className="space-y-4">
-          <div className="bg-gray-900/50 border border-gray-800/60 rounded-xl p-5">
-            <h3 className="text-sm font-semibold text-white mb-4">Quick Actions</h3>
-            <div className="space-y-2">
-              <a
-                href="/dashboard/series/new"
-                className="flex items-center gap-3 w-full px-4 py-3 bg-purple-600 hover:bg-purple-500 rounded-lg text-sm font-medium text-white transition-colors"
-              >
-                <span>+</span>
-                Create New Series
-              </a>
-              <a
-                href="/dashboard/moderation"
-                className="flex items-center gap-3 w-full px-4 py-3 bg-gray-800/70 hover:bg-gray-800 rounded-lg text-sm font-medium text-gray-300 transition-colors"
-              >
-                <span>⛨</span>
-                Moderation Queue
-              </a>
-              <a
-                href="/dashboard/distribution"
-                className="flex items-center gap-3 w-full px-4 py-3 bg-gray-800/70 hover:bg-gray-800 rounded-lg text-sm font-medium text-gray-300 transition-colors"
-              >
-                <span>↗</span>
-                Distribution Jobs
-              </a>
-            </div>
+        {/* Top Community Posts */}
+        <div className="bg-gray-900/50 border border-gray-800/60 rounded-xl p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-white">Top Community Posts</h3>
+            <span className="text-[10px] text-gray-500 uppercase tracking-wider">By votes</span>
           </div>
-
-          <div className="bg-gray-900/50 border border-gray-800/60 rounded-xl p-5">
-            <h3 className="text-sm font-semibold text-white mb-4">System Status</h3>
+          {!cs || cs.topThreads.length === 0 ? (
+            <p className="text-gray-500 text-sm">No community posts yet.</p>
+          ) : (
             <div className="space-y-3">
-              {[
-                { label: 'API', status: 'Operational', ok: true },
-                { label: 'Database', status: 'Connected', ok: true },
-                { label: 'Series', status: `${seriesList.length} active`, ok: null },
-                { label: 'Environment', status: process.env.NEXT_PUBLIC_ENVIRONMENT ?? 'development', ok: null },
-              ].map((row) => (
-                <div key={row.label} className="flex items-center justify-between text-sm">
-                  <span className="text-gray-400">{row.label}</span>
-                  <span className={row.ok === true ? 'text-green-400' : row.ok === false ? 'text-red-400' : 'text-yellow-400'}>
-                    {row.status}
+              {cs.topThreads.map((t) => (
+                <div key={t.id} className="flex items-start gap-3">
+                  <div className="flex flex-col items-center gap-0.5 min-w-[40px]">
+                    <span className="text-xs text-orange-400 font-bold">⬆ {t.voteCount}</span>
+                    <span className="text-[10px] text-gray-600">{t.replyCount} replies</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-white truncate">{t.title}</p>
+                    {t.seriesTitle && (
+                      <p className="text-[11px] text-gray-500 mt-0.5">{t.seriesTitle}</p>
+                    )}
+                  </div>
+                  <span className="text-[10px] text-gray-600 flex-shrink-0">
+                    {new Date(t.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                   </span>
                 </div>
               ))}
             </div>
+          )}
+        </div>
+      </div>
+
+      {/* Wiki Activity + Moderation Health + Quick Actions */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        {/* Wiki / Lore Activity */}
+        <div className="bg-gray-900/50 border border-gray-800/60 rounded-xl p-5">
+          <h3 className="text-sm font-semibold text-white mb-4">Wiki / Lore Activity</h3>
+          {cs ? (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-400">Pages Created</span>
+                <span className="text-white font-medium">{cs.wiki.pagesCreated}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-400">Edits Approved</span>
+                <span className="text-green-400 font-medium">{cs.wiki.editsApproved}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-400">Edits Rejected</span>
+                <span className="text-red-400 font-medium">{cs.wiki.editsRejected}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm border-t border-gray-800/40 pt-3">
+                <span className="text-gray-400">Pending Review</span>
+                <a href="/dashboard/moderation" className="flex items-center gap-1.5">
+                  <span className={`font-bold ${cs.wiki.editsPending > 0 ? 'text-yellow-400' : 'text-green-400'}`}>
+                    {cs.wiki.editsPending}
+                  </span>
+                  {cs.wiki.editsPending > 0 && (
+                    <span className="text-[10px] text-purple-400 hover:underline">Review →</span>
+                  )}
+                </a>
+              </div>
+            </div>
+          ) : (
+            <p className="text-gray-500 text-sm">No wiki data available.</p>
+          )}
+        </div>
+
+        {/* Moderation Health */}
+        <div className="bg-gray-900/50 border border-gray-800/60 rounded-xl p-5">
+          <h3 className="text-sm font-semibold text-white mb-4">Moderation Health</h3>
+          {cs ? (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-400">Open Reports</span>
+                <div className="flex items-center gap-2">
+                  <span className={`w-2 h-2 rounded-full ${
+                    cs.moderation.openReports === 0 ? 'bg-green-400' :
+                    cs.moderation.openReports <= 3 ? 'bg-yellow-400' : 'bg-red-400'
+                  }`} />
+                  <span className="text-white font-medium">{cs.moderation.openReports}</span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-400">Under Review</span>
+                <div className="flex items-center gap-2">
+                  <span className={`w-2 h-2 rounded-full ${
+                    cs.moderation.underReviewReports === 0 ? 'bg-green-400' : 'bg-yellow-400'
+                  }`} />
+                  <span className="text-white font-medium">{cs.moderation.underReviewReports}</span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-400">Wiki Edits Pending</span>
+                <div className="flex items-center gap-2">
+                  <span className={`w-2 h-2 rounded-full ${
+                    cs.wiki.editsPending === 0 ? 'bg-green-400' : 'bg-yellow-400'
+                  }`} />
+                  <span className="text-white font-medium">{cs.wiki.editsPending}</span>
+                </div>
+              </div>
+              <div className="border-t border-gray-800/40 pt-3">
+                <a
+                  href="/dashboard/moderation"
+                  className="flex items-center justify-center w-full px-4 py-2 bg-gray-800/70 hover:bg-gray-800 rounded-lg text-xs font-medium text-gray-300 transition-colors"
+                >
+                  Open Moderation Queue
+                </a>
+              </div>
+            </div>
+          ) : (
+            <p className="text-gray-500 text-sm">No moderation data.</p>
+          )}
+        </div>
+
+        {/* Quick Actions */}
+        <div className="bg-gray-900/50 border border-gray-800/60 rounded-xl p-5">
+          <h3 className="text-sm font-semibold text-white mb-4">Quick Actions</h3>
+          <div className="space-y-2">
+            <a
+              href="/dashboard/series/new"
+              className="flex items-center gap-3 w-full px-4 py-3 bg-purple-600 hover:bg-purple-500 rounded-lg text-sm font-medium text-white transition-colors"
+            >
+              <span>+</span>
+              Create New Series
+            </a>
+            <a
+              href="/dashboard/moderation"
+              className="flex items-center gap-3 w-full px-4 py-3 bg-gray-800/70 hover:bg-gray-800 rounded-lg text-sm font-medium text-gray-300 transition-colors"
+            >
+              <span>⛨</span>
+              Moderation Queue
+            </a>
+            <a
+              href="/dashboard/distribution"
+              className="flex items-center gap-3 w-full px-4 py-3 bg-gray-800/70 hover:bg-gray-800 rounded-lg text-sm font-medium text-gray-300 transition-colors"
+            >
+              <span>↗</span>
+              Distribution Jobs
+            </a>
+            <a
+              href="/dashboard/users"
+              className="flex items-center gap-3 w-full px-4 py-3 bg-gray-800/70 hover:bg-gray-800 rounded-lg text-sm font-medium text-gray-300 transition-colors"
+            >
+              <span>◎</span>
+              Manage Users
+            </a>
           </div>
         </div>
       </div>

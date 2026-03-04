@@ -63,4 +63,18 @@ export class AnalyticsController {
   getPlatformSnapshot(@Query('days') days?: string) {
     return this.analyticsService.getPlatformSnapshot(days ? parseInt(days, 10) : 7);
   }
+
+  @Get('admin/analytics/community')
+  @Roles(UserRole.analytics_admin, UserRole.superadmin)
+  @ApiOperation({ summary: '[Admin] Community engagement, wiki activity, and moderation stats' })
+  getCommunityStats(@Query('days') days?: string) {
+    return this.analyticsService.getCommunityStats(days ? parseInt(days, 10) : 7);
+  }
+
+  @Get('admin/analytics/trending')
+  @Roles(UserRole.analytics_admin, UserRole.superadmin)
+  @ApiOperation({ summary: '[Admin] Trending series ranked by views' })
+  getTrendingSeries(@Query('days') days?: string) {
+    return this.analyticsService.getTrendingSeries(days ? parseInt(days, 10) : 7);
+  }
 }
