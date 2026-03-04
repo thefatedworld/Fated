@@ -23,6 +23,7 @@ initAuthClient();
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const ICON_SIZE = SCREEN_W * 0.38;
+const RING_BASE = Math.max(SCREEN_W, SCREEN_H) * 0.15;
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -43,30 +44,42 @@ Notifications.setNotificationHandler({
 
 function AnimatedSplash({ onFinish }: { onFinish: () => void }) {
   const iconOpacity = useSharedValue(0);
-  const iconScale = useSharedValue(0.85);
-  const flareX = useSharedValue(-SCREEN_W);
-  const flareOpacity = useSharedValue(0);
+  const iconScale = useSharedValue(0.92);
+  const ringScale = useSharedValue(0.1);
+  const ringOpacity = useSharedValue(0);
+  const glowOpacity = useSharedValue(0);
   const containerOpacity = useSharedValue(1);
 
   useEffect(() => {
     SplashScreen.hideAsync();
 
-    // 0-400ms: black hold
-    // 400-1200ms: flare sweeps left to right
-    flareOpacity.value = withDelay(400, withSequence(
-      withTiming(1, { duration: 100 }),
-      withDelay(600, withTiming(0, { duration: 200 })),
+    // 300-1400ms: ring expands outward from center
+    ringOpacity.value = withDelay(300, withSequence(
+      withTiming(0.85, { duration: 200 }),
+      withDelay(700, withTiming(0, { duration: 300 })),
     ));
-    flareX.value = withDelay(400, withTiming(SCREEN_W, {
-      duration: 800,
-      easing: Easing.inOut(Easing.cubic),
+    ringScale.value = withDelay(300, withTiming(4.0, {
+      duration: 1100,
+      easing: Easing.out(Easing.cubic),
     }));
 
-    // 500-900ms: logo fades in as flare crosses center
-    iconOpacity.value = withDelay(500, withTiming(1, { duration: 400, easing: Easing.out(Easing.cubic) }));
-    iconScale.value = withDelay(500, withTiming(1, { duration: 600, easing: Easing.out(Easing.cubic) }));
+    // 400-900ms: inner glow illumination
+    glowOpacity.value = withDelay(400, withSequence(
+      withTiming(0.15, { duration: 300 }),
+      withDelay(400, withTiming(0, { duration: 400 })),
+    ));
 
-    // 1800-2200ms: entire container fades out
+    // 500-1000ms: logo revealed as ring passes through
+    iconOpacity.value = withDelay(500, withTiming(1, {
+      duration: 500,
+      easing: Easing.out(Easing.cubic),
+    }));
+    iconScale.value = withDelay(500, withTiming(1, {
+      duration: 600,
+      easing: Easing.out(Easing.cubic),
+    }));
+
+    // 1800-2200ms: fade out to app
     containerOpacity.value = withDelay(1800, withTiming(0, { duration: 400 }, (finished) => {
       if (finished) runOnJS(onFinish)();
     }));
@@ -77,9 +90,14 @@ function AnimatedSplash({ onFinish }: { onFinish: () => void }) {
     transform: [{ scale: iconScale.value }],
   }));
 
-  const flareAnimStyle = useAnimatedStyle(() => ({
-    opacity: flareOpacity.value,
-    transform: [{ translateX: flareX.value }],
+  const ringAnimStyle = useAnimatedStyle(() => ({
+    opacity: ringOpacity.value,
+    transform: [{ scale: ringScale.value }],
+  }));
+
+  const glowAnimStyle = useAnimatedStyle(() => ({
+    opacity: glowOpacity.value,
+    transform: [{ scale: ringScale.value }],
   }));
 
   const containerAnimStyle = useAnimatedStyle(() => ({
@@ -88,20 +106,19 @@ function AnimatedSplash({ onFinish }: { onFinish: () => void }) {
 
   return (
     <Animated.View style={[splashStyles.container, containerAnimStyle]}>
-      {/* Logo */}
+      {/* Inner glow / illumination fill */}
+      <Animated.View style={[splashStyles.glowFill, glowAnimStyle]} />
+
+      {/* Expanding ring of light */}
+      <Animated.View style={[splashStyles.ring, ringAnimStyle]} />
+
+      {/* Logo - revealed by the ring */}
       <Animated.View style={[splashStyles.iconWrap, iconAnimStyle]}>
         <Image
           source={require('../../assets/icon.png')}
           style={splashStyles.icon}
           resizeMode="contain"
         />
-      </Animated.View>
-
-      {/* Lens flare / screen wipe */}
-      <Animated.View style={[splashStyles.flare, flareAnimStyle]}>
-        <View style={splashStyles.flareCore} />
-        <View style={splashStyles.flareGlowInner} />
-        <View style={splashStyles.flareGlowOuter} />
       </Animated.View>
     </Animated.View>
   );
@@ -150,36 +167,31 @@ const splashStyles = StyleSheet.create({
     height: ICON_SIZE,
     borderRadius: ICON_SIZE * 0.22,
     overflow: 'hidden',
+    zIndex: 10,
   },
   icon: {
     width: '100%',
     height: '100%',
   },
-  flare: {
+  ring: {
     position: 'absolute',
-    top: 0,
-    bottom: 0,
-    width: 60,
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: RING_BASE,
+    height: RING_BASE,
+    borderRadius: RING_BASE / 2,
+    borderWidth: 3,
+    borderColor: 'rgba(212,175,55,0.8)',
+    shadowColor: '#d4af37',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.9,
+    shadowRadius: 25,
+    elevation: 15,
   },
-  flareCore: {
+  glowFill: {
     position: 'absolute',
-    width: 3,
-    height: SCREEN_H,
-    backgroundColor: 'rgba(255,255,255,0.9)',
-  },
-  flareGlowInner: {
-    position: 'absolute',
-    width: 30,
-    height: SCREEN_H,
-    backgroundColor: 'rgba(212,175,55,0.25)',
-  },
-  flareGlowOuter: {
-    position: 'absolute',
-    width: 60,
-    height: SCREEN_H,
-    backgroundColor: 'rgba(212,175,55,0.08)',
+    width: RING_BASE,
+    height: RING_BASE,
+    borderRadius: RING_BASE / 2,
+    backgroundColor: 'rgba(212,175,55,0.12)',
   },
 });
 
