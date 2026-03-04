@@ -2,9 +2,11 @@ import { Controller, Post, Param, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiExcludeController } from '@nestjs/swagger';
 import { ContentService } from './content.service';
 import { InternalRequestGuard } from '../../common/guards/internal-request.guard';
+import { Public } from '../../common/decorators/public.decorator';
 
 @ApiExcludeController()
 @ApiTags('internal')
+@Public()
 @UseGuards(InternalRequestGuard)
 @Controller('v1/internal')
 export class ContentInternalController {

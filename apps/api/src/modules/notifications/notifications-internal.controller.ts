@@ -2,8 +2,10 @@ import { Controller, Post, Body, UseGuards } from '@nestjs/common';
 import { ApiExcludeController } from '@nestjs/swagger';
 import { NotificationsService } from './notifications.service';
 import { InternalRequestGuard } from '../../common/guards/internal-request.guard';
+import { Public } from '../../common/decorators/public.decorator';
 
 @ApiExcludeController()
+@Public()
 @UseGuards(InternalRequestGuard)
 @Controller('v1/internal/notifications')
 export class NotificationsInternalController {
