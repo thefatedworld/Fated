@@ -5,6 +5,25 @@ import { useRouter, useParams } from 'next/navigation';
 import { adminApi, Series, Episode, Season, UpdateEpisodeInput } from '@/lib/api-client';
 import { getToken } from '@/lib/utils';
 
+interface SeriesAnalytics {
+  seriesId: string;
+  period: string;
+  dailySnapshots: {
+    date: string;
+    views: number;
+    watchMinutes: string;
+    tokensSold: string;
+    unlocks: number;
+    completionRate: number | null;
+  }[];
+  totals: {
+    views: number;
+    watchMinutes: string;
+    tokensSold: string;
+    unlocks: number;
+  };
+}
+
 export default function SeriesDetailPage() {
   const router = useRouter();
   const params = useParams();
@@ -12,6 +31,7 @@ export default function SeriesDetailPage() {
 
   const [series, setSeries] = useState<Series | null>(null);
   const [episodes, setEpisodes] = useState<Episode[]>([]);
+  const [analytics, setAnalytics] = useState<SeriesAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
   const [showCreateEpisode, setShowCreateEpisode] = useState(false);
   const [scheduleModal, setScheduleModal] = useState<string | null>(null);
@@ -64,6 +84,10 @@ export default function SeriesDetailPage() {
         const seasonsData = await adminApi.listSeasons(token, id);
         setSeasons(seasonsData);
       } catch { /* seasons endpoint may not exist yet */ }
+      try {
+        const analyticsData = await adminApi.getSeriesAnalytics(token, id) as SeriesAnalytics;
+        setAnalytics(analyticsData);
+      } catch { /* analytics may not be available */ }
     } catch {
       router.push('/login');
     } finally {
@@ -331,6 +355,66 @@ export default function SeriesDetailPage() {
       {error && (
         <div className="mb-4 px-4 py-3 bg-red-950/30 border border-red-900/40 rounded-xl text-red-400 text-sm">
           {error}
+        </div>
+      )}
+
+      {/* Series Analytics */}
+      {analytics && (
+        <div className="mb-8">
+          <h2 className="text-lg font-semibold text-white mb-4">Analytics — {analytics.period}</h2>
+
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            {[
+              { label: 'Total Views', value: analytics.totals.views.toLocaleString(), icon: '▶', color: 'bg-purple-600/10 text-purple-400 border-purple-500/10' },
+              { label: 'Watch Time', value: `${Math.round(Number(analytics.totals.watchMinutes))}m`, icon: '⏱', color: 'bg-teal-600/10 text-teal-400 border-teal-500/10' },
+              { label: 'Tokens Sold', value: Number(analytics.totals.tokensSold).toLocaleString(), icon: '⬡', color: 'bg-amber-600/10 text-amber-400 border-amber-500/10' },
+              { label: 'Unlocks', value: analytics.totals.unlocks.toLocaleString(), icon: '↗', color: 'bg-green-600/10 text-green-400 border-green-500/10' },
+            ].map((card) => (
+              <div key={card.label} className={`rounded-xl p-5 border ${card.color}`}>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-medium uppercase tracking-wider opacity-70">{card.label}</span>
+                  <span className="text-lg">{card.icon}</span>
+                </div>
+                <p className="text-2xl font-bold">{card.value}</p>
+              </div>
+            ))}
+          </div>
+
+          {analytics.dailySnapshots.length > 0 && (
+            <div className="bg-gray-900/50 border border-gray-800/60 rounded-xl overflow-hidden mb-6">
+              <div className="px-5 py-3 border-b border-gray-800/60">
+                <h3 className="text-sm font-semibold text-white">Daily Breakdown</h3>
+              </div>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-800/60">
+                    <th className="text-left text-gray-500 font-medium px-5 py-2.5 text-xs">Date</th>
+                    <th className="text-right text-gray-500 font-medium px-5 py-2.5 text-xs">Views</th>
+                    <th className="text-right text-gray-500 font-medium px-5 py-2.5 text-xs">Watch Time</th>
+                    <th className="text-right text-gray-500 font-medium px-5 py-2.5 text-xs">Tokens</th>
+                    <th className="text-right text-gray-500 font-medium px-5 py-2.5 text-xs">Unlocks</th>
+                    <th className="text-right text-gray-500 font-medium px-5 py-2.5 text-xs">Completion</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {analytics.dailySnapshots.map((d) => (
+                    <tr key={d.date} className="border-b border-gray-800/40 hover:bg-gray-800/20">
+                      <td className="px-5 py-2.5 text-gray-300">
+                        {new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      </td>
+                      <td className="px-5 py-2.5 text-right text-white font-medium">{d.views.toLocaleString()}</td>
+                      <td className="px-5 py-2.5 text-right text-teal-400">{Math.round(Number(d.watchMinutes))}m</td>
+                      <td className="px-5 py-2.5 text-right text-amber-400">{Number(d.tokensSold).toLocaleString()}</td>
+                      <td className="px-5 py-2.5 text-right text-green-400">{d.unlocks.toLocaleString()}</td>
+                      <td className="px-5 py-2.5 text-right text-gray-400">
+                        {d.completionRate != null ? `${Math.round(d.completionRate * 100)}%` : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 

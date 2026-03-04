@@ -124,7 +124,15 @@ export class AnalyticsService {
       orderBy: { date: 'desc' },
     });
 
-    return snapshots;
+    return snapshots.map((s) => ({
+      date: s.date,
+      newUsers: s.newUsers,
+      totalViews: s.totalViews,
+      totalWatchMinutes: s.totalWatchMinutes.toString(),
+      tokensSold: s.tokensSold.toString(),
+      unlocks: s.unlocks,
+      completionRate: s.completionRate,
+    }));
   }
 
   /**
