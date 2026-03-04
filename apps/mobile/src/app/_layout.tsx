@@ -10,9 +10,10 @@ import Animated, {
   useAnimatedStyle,
   withTiming,
   withDelay,
-  withSequence,
+  withRepeat,
   runOnJS,
   Easing,
+  useDerivedValue,
 } from 'react-native-reanimated';
 import { initAuthClient } from '@/lib/auth';
 import { useAuthStore } from '@/store/auth.store';
@@ -22,8 +23,9 @@ SplashScreen.preventAutoHideAsync();
 initAuthClient();
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
-const ICON_SIZE = SCREEN_W * 0.38;
-const RING_BASE = Math.max(SCREEN_W, SCREEN_H) * 0.15;
+const ICON_SIZE = SCREEN_W * 0.42;
+const ORBIT_RADIUS = SCREEN_W * 0.24;
+const TRAIL_COUNT = 10;
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -44,75 +46,107 @@ Notifications.setNotificationHandler({
 
 function AnimatedSplash({ onFinish }: { onFinish: () => void }) {
   const iconOpacity = useSharedValue(0);
-  const iconScale = useSharedValue(0.92);
-  const ringScale = useSharedValue(0.1);
-  const ringOpacity = useSharedValue(0);
+  const iconScale = useSharedValue(0.88);
+  const cometAngle = useSharedValue(-Math.PI / 2);
+  const cometOpacity = useSharedValue(0);
   const glowOpacity = useSharedValue(0);
   const containerOpacity = useSharedValue(1);
+  const starfieldOpacity = useSharedValue(0);
 
   useEffect(() => {
     SplashScreen.hideAsync();
 
-    // 300-1400ms: ring expands outward from center
-    ringOpacity.value = withDelay(300, withSequence(
-      withTiming(0.85, { duration: 200 }),
-      withDelay(700, withTiming(0, { duration: 300 })),
-    ));
-    ringScale.value = withDelay(300, withTiming(4.0, {
-      duration: 1100,
-      easing: Easing.out(Easing.cubic),
-    }));
+    // Fade in starfield background
+    starfieldOpacity.value = withTiming(0.35, { duration: 600 });
 
-    // 400-900ms: inner glow illumination
-    glowOpacity.value = withDelay(400, withSequence(
-      withTiming(0.15, { duration: 300 }),
-      withDelay(400, withTiming(0, { duration: 400 })),
-    ));
+    // Start comet orbiting (1.5 rotations over 2.4s)
+    cometOpacity.value = withDelay(300, withTiming(1, { duration: 300 }));
+    cometAngle.value = withDelay(300,
+      withTiming(-Math.PI / 2 + Math.PI * 3, {
+        duration: 2400,
+        easing: Easing.inOut(Easing.cubic),
+      }),
+    );
 
-    // 500-1000ms: logo revealed as ring passes through
-    iconOpacity.value = withDelay(500, withTiming(1, {
-      duration: 500,
-      easing: Easing.out(Easing.cubic),
-    }));
-    iconScale.value = withDelay(500, withTiming(1, {
+    // Glow follows comet
+    glowOpacity.value = withDelay(400, withTiming(0.5, { duration: 400 }));
+
+    // Logo fades in after first quarter orbit
+    iconOpacity.value = withDelay(700, withTiming(1, {
       duration: 600,
       easing: Easing.out(Easing.cubic),
     }));
+    iconScale.value = withDelay(700, withTiming(1, {
+      duration: 700,
+      easing: Easing.out(Easing.cubic),
+    }));
 
-    // 1800-2200ms: fade out to app
-    containerOpacity.value = withDelay(1800, withTiming(0, { duration: 400 }, (finished) => {
+    // Fade out comet near end
+    cometOpacity.value = withDelay(2200, withTiming(0, { duration: 500 }));
+    glowOpacity.value = withDelay(2200, withTiming(0, { duration: 500 }));
+
+    // Fade out everything
+    containerOpacity.value = withDelay(2800, withTiming(0, { duration: 500 }, (finished) => {
       if (finished) runOnJS(onFinish)();
     }));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const cometX = useDerivedValue(() => Math.cos(cometAngle.value) * ORBIT_RADIUS);
+  const cometY = useDerivedValue(() => Math.sin(cometAngle.value) * ORBIT_RADIUS);
 
   const iconAnimStyle = useAnimatedStyle(() => ({
     opacity: iconOpacity.value,
     transform: [{ scale: iconScale.value }],
   }));
 
-  const ringAnimStyle = useAnimatedStyle(() => ({
-    opacity: ringOpacity.value,
-    transform: [{ scale: ringScale.value }],
-  }));
-
-  const glowAnimStyle = useAnimatedStyle(() => ({
-    opacity: glowOpacity.value,
-    transform: [{ scale: ringScale.value }],
-  }));
-
   const containerAnimStyle = useAnimatedStyle(() => ({
     opacity: containerOpacity.value,
   }));
 
+  const starfieldAnimStyle = useAnimatedStyle(() => ({
+    opacity: starfieldOpacity.value,
+  }));
+
+  // Directional glow that follows the comet
+  const glowAnimStyle = useAnimatedStyle(() => ({
+    opacity: glowOpacity.value * cometOpacity.value,
+    transform: [
+      { translateX: cometX.value * 0.5 },
+      { translateY: cometY.value * 0.5 },
+    ],
+  }));
+
+  // Generate trail configs (each one is slightly behind the lead)
+  const trailElements = [];
+  for (let i = 0; i < TRAIL_COUNT; i++) {
+    trailElements.push(
+      <CometTrailDot
+        key={i}
+        index={i}
+        cometAngle={cometAngle}
+        cometOpacity={cometOpacity}
+      />,
+    );
+  }
+
   return (
     <Animated.View style={[splashStyles.container, containerAnimStyle]}>
-      {/* Inner glow / illumination fill */}
-      <Animated.View style={[splashStyles.glowFill, glowAnimStyle]} />
+      {/* Starfield background */}
+      <Animated.View style={[splashStyles.starfieldWrap, starfieldAnimStyle]}>
+        <Image
+          source={require('../../assets/icon.png')}
+          style={splashStyles.starfield}
+          resizeMode="cover"
+        />
+      </Animated.View>
 
-      {/* Expanding ring of light */}
-      <Animated.View style={[splashStyles.ring, ringAnimStyle]} />
+      {/* Directional glow */}
+      <Animated.View style={[splashStyles.glow, glowAnimStyle]} />
 
-      {/* Logo - revealed by the ring */}
+      {/* Comet trail */}
+      {trailElements}
+
+      {/* Logo */}
       <Animated.View style={[splashStyles.iconWrap, iconAnimStyle]}>
         <Image
           source={require('../../assets/icon.png')}
@@ -122,6 +156,45 @@ function AnimatedSplash({ onFinish }: { onFinish: () => void }) {
       </Animated.View>
     </Animated.View>
   );
+}
+
+function CometTrailDot({
+  index,
+  cometAngle,
+  cometOpacity,
+}: {
+  index: number;
+  cometAngle: Animated.SharedValue<number>;
+  cometOpacity: Animated.SharedValue<number>;
+}) {
+  const angleOffset = index * 0.12;
+  const opacityFactor = 1 - index / TRAIL_COUNT;
+  const sizeFactor = 1 - index * 0.07;
+  const baseSize = 8;
+
+  const animStyle = useAnimatedStyle(() => {
+    'worklet';
+    const angle = cometAngle.value - angleOffset;
+    const x = Math.cos(angle) * ORBIT_RADIUS;
+    const y = Math.sin(angle) * ORBIT_RADIUS;
+    const size = baseSize * sizeFactor;
+    return {
+      position: 'absolute',
+      left: SCREEN_W / 2 - size / 2 + x,
+      top: SCREEN_H / 2 - size / 2 + y,
+      width: size,
+      height: size,
+      borderRadius: size / 2,
+      backgroundColor: index === 0 ? '#fff8e1' : '#d4af37',
+      opacity: cometOpacity.value * opacityFactor * (index === 0 ? 1 : 0.7),
+      shadowColor: index === 0 ? '#ffffff' : '#d4af37',
+      shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: index === 0 ? 1 : 0.6,
+      shadowRadius: index === 0 ? 20 : 10 * opacityFactor,
+    };
+  });
+
+  return <Animated.View style={animStyle} />;
 }
 
 function AuthGate({ children }: { children: React.ReactNode }) {
@@ -162,6 +235,13 @@ const splashStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  starfieldWrap: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  starfield: {
+    width: SCREEN_W,
+    height: SCREEN_H,
+  },
   iconWrap: {
     width: ICON_SIZE,
     height: ICON_SIZE,
@@ -173,25 +253,17 @@ const splashStyles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  ring: {
+  glow: {
     position: 'absolute',
-    width: RING_BASE,
-    height: RING_BASE,
-    borderRadius: RING_BASE / 2,
-    borderWidth: 3,
-    borderColor: 'rgba(212,175,55,0.8)',
+    width: ICON_SIZE * 1.8,
+    height: ICON_SIZE * 1.8,
+    borderRadius: ICON_SIZE * 0.9,
+    backgroundColor: 'rgba(212,175,55,0.08)',
     shadowColor: '#d4af37',
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.9,
-    shadowRadius: 25,
-    elevation: 15,
-  },
-  glowFill: {
-    position: 'absolute',
-    width: RING_BASE,
-    height: RING_BASE,
-    borderRadius: RING_BASE / 2,
-    backgroundColor: 'rgba(212,175,55,0.12)',
+    shadowOpacity: 0.6,
+    shadowRadius: 60,
+    zIndex: 5,
   },
 });
 

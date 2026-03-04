@@ -65,12 +65,20 @@ export class DistributionService {
       },
     });
 
-    // Enqueue processing task
+    // Enqueue processing task (non-fatal if queue not configured)
     const queueName = this.config.get<string>('CLOUD_TASKS_DISTRIBUTION_QUEUE', '');
-    await this.cloudTasks.enqueueTask(queueName, {
-      url: `/v1/internal/distribution/process/${job.id}`,
-      body: { jobId: job.id },
-    });
+    if (queueName) {
+      try {
+        await this.cloudTasks.enqueueTask(queueName, {
+          url: `/v1/internal/distribution/process/${job.id}`,
+          body: { jobId: job.id },
+        });
+      } catch (err) {
+        this.logger.warn(`Failed to enqueue distribution task for job ${job.id}: ${err}`);
+      }
+    } else {
+      this.logger.warn(`CLOUD_TASKS_DISTRIBUTION_QUEUE not configured, job ${job.id} created but not enqueued`);
+    }
 
     await this.audit.log({
       actorId: params.requestedBy,

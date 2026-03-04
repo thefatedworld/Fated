@@ -4,6 +4,16 @@ import { useEffect, useState, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { adminApi, Series, Episode, Season, UpdateEpisodeInput } from '@/lib/api-client';
 import { getToken } from '@/lib/utils';
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+} from 'recharts';
 
 interface SeriesAnalytics {
   seriesId: string;
@@ -24,6 +34,14 @@ interface SeriesAnalytics {
   };
 }
 
+const DATE_RANGES = [
+  { label: '1d', days: 1 },
+  { label: '7d', days: 7 },
+  { label: '14d', days: 14 },
+  { label: '30d', days: 30 },
+  { label: 'All', days: 3650 },
+] as const;
+
 export default function SeriesDetailPage() {
   const router = useRouter();
   const params = useParams();
@@ -32,6 +50,10 @@ export default function SeriesDetailPage() {
   const [series, setSeries] = useState<Series | null>(null);
   const [episodes, setEpisodes] = useState<Episode[]>([]);
   const [analytics, setAnalytics] = useState<SeriesAnalytics | null>(null);
+  const [analyticsDays, setAnalyticsDays] = useState(30);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [tableExpanded, setTableExpanded] = useState(false);
+  const [tableOffset, setTableOffset] = useState(0);
   const [loading, setLoading] = useState(true);
   const [showCreateEpisode, setShowCreateEpisode] = useState(false);
   const [scheduleModal, setScheduleModal] = useState<string | null>(null);
@@ -85,7 +107,7 @@ export default function SeriesDetailPage() {
         setSeasons(seasonsData);
       } catch { /* seasons endpoint may not exist yet */ }
       try {
-        const analyticsData = await adminApi.getSeriesAnalytics(token, id) as SeriesAnalytics;
+        const analyticsData = await adminApi.getSeriesAnalytics(token, id, analyticsDays) as SeriesAnalytics;
         setAnalytics(analyticsData);
       } catch { /* analytics may not be available */ }
     } catch {
@@ -96,6 +118,23 @@ export default function SeriesDetailPage() {
   }
 
   useEffect(() => { load(); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function reloadAnalytics(days: number) {
+    const token = getToken();
+    if (!token) return;
+    setAnalyticsLoading(true);
+    setTableOffset(0);
+    try {
+      const data = await adminApi.getSeriesAnalytics(token, id, days) as SeriesAnalytics;
+      setAnalytics(data);
+    } catch { /* ignore */ }
+    setAnalyticsLoading(false);
+  }
+
+  function handleDateRangeChange(days: number) {
+    setAnalyticsDays(days);
+    reloadAnalytics(days);
+  }
 
   async function handleCreateSeason(e: React.FormEvent) {
     e.preventDefault();
@@ -361,7 +400,27 @@ export default function SeriesDetailPage() {
       {/* Series Analytics */}
       {analytics && (
         <div className="mb-8">
-          <h2 className="text-lg font-semibold text-white mb-4">Analytics — {analytics.period}</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-white">
+              Analytics
+              {analyticsLoading && <span className="ml-2 inline-block w-3 h-3 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />}
+            </h2>
+            <div className="flex items-center gap-1 bg-gray-900/80 border border-gray-800/60 rounded-lg p-0.5">
+              {DATE_RANGES.map((r) => (
+                <button
+                  key={r.label}
+                  onClick={() => handleDateRangeChange(r.days)}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                    analyticsDays === r.days
+                      ? 'bg-purple-600 text-white'
+                      : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                  }`}
+                >
+                  {r.label}
+                </button>
+              ))}
+            </div>
+          </div>
 
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             {[
@@ -380,41 +439,117 @@ export default function SeriesDetailPage() {
             ))}
           </div>
 
+          {/* Chart */}
           {analytics.dailySnapshots.length > 0 && (
-            <div className="bg-gray-900/50 border border-gray-800/60 rounded-xl overflow-hidden mb-6">
-              <div className="px-5 py-3 border-b border-gray-800/60">
-                <h3 className="text-sm font-semibold text-white">Daily Breakdown</h3>
-              </div>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-800/60">
-                    <th className="text-left text-gray-500 font-medium px-5 py-2.5 text-xs">Date</th>
-                    <th className="text-right text-gray-500 font-medium px-5 py-2.5 text-xs">Views</th>
-                    <th className="text-right text-gray-500 font-medium px-5 py-2.5 text-xs">Watch Time</th>
-                    <th className="text-right text-gray-500 font-medium px-5 py-2.5 text-xs">Tokens</th>
-                    <th className="text-right text-gray-500 font-medium px-5 py-2.5 text-xs">Unlocks</th>
-                    <th className="text-right text-gray-500 font-medium px-5 py-2.5 text-xs">Completion</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {analytics.dailySnapshots.map((d) => (
-                    <tr key={d.date} className="border-b border-gray-800/40 hover:bg-gray-800/20">
-                      <td className="px-5 py-2.5 text-gray-300">
-                        {new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                      </td>
-                      <td className="px-5 py-2.5 text-right text-white font-medium">{d.views.toLocaleString()}</td>
-                      <td className="px-5 py-2.5 text-right text-teal-400">{Math.round(Number(d.watchMinutes))}m</td>
-                      <td className="px-5 py-2.5 text-right text-amber-400">{Number(d.tokensSold).toLocaleString()}</td>
-                      <td className="px-5 py-2.5 text-right text-green-400">{d.unlocks.toLocaleString()}</td>
-                      <td className="px-5 py-2.5 text-right text-gray-400">
-                        {d.completionRate != null ? `${Math.round(d.completionRate * 100)}%` : '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="bg-gray-900/50 border border-gray-800/60 rounded-xl p-5 mb-6">
+              <h3 className="text-sm font-semibold text-white mb-4">Trend</h3>
+              <ResponsiveContainer width="100%" height={260}>
+                <AreaChart
+                  data={[...analytics.dailySnapshots].reverse().map((d) => ({
+                    date: new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+                    Views: d.views,
+                    'Watch Min': Math.round(Number(d.watchMinutes)),
+                    Tokens: Number(d.tokensSold),
+                    Unlocks: d.unlocks,
+                  }))}
+                  margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
+                >
+                  <defs>
+                    <linearGradient id="gViews" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#a855f7" stopOpacity={0.4} />
+                      <stop offset="95%" stopColor="#a855f7" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="gTokens" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+                  <XAxis dataKey="date" tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={false} tickLine={false} width={40} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: '#111827', border: '1px solid #374151', borderRadius: 8, fontSize: 12 }}
+                    labelStyle={{ color: '#9ca3af' }}
+                  />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <Area type="monotone" dataKey="Views" stroke="#a855f7" fill="url(#gViews)" strokeWidth={2} />
+                  <Area type="monotone" dataKey="Watch Min" stroke="#14b8a6" fill="none" strokeWidth={1.5} strokeDasharray="4 2" />
+                  <Area type="monotone" dataKey="Tokens" stroke="#f59e0b" fill="url(#gTokens)" strokeWidth={1.5} />
+                  <Area type="monotone" dataKey="Unlocks" stroke="#22c55e" fill="none" strokeWidth={1.5} />
+                </AreaChart>
+              </ResponsiveContainer>
             </div>
           )}
+
+          {/* Daily breakdown table with pagination */}
+          {analytics.dailySnapshots.length > 0 && (() => {
+            const pageSize = tableExpanded ? 30 : 7;
+            const allRows = analytics.dailySnapshots;
+            const visibleRows = allRows.slice(tableOffset, tableOffset + pageSize);
+            const canPrev = tableOffset > 0;
+            const canNext = tableOffset + pageSize < allRows.length;
+
+            return (
+              <div className="bg-gray-900/50 border border-gray-800/60 rounded-xl overflow-hidden mb-6">
+                <div className="px-5 py-3 border-b border-gray-800/60 flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-white">Daily Breakdown</h3>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => { setTableOffset(Math.max(0, tableOffset - pageSize)); }}
+                      disabled={!canPrev}
+                      className="px-2 py-1 text-xs rounded bg-gray-800 text-gray-400 hover:text-white disabled:opacity-30 transition-colors"
+                    >
+                      ← Prev
+                    </button>
+                    <span className="text-xs text-gray-500">
+                      {tableOffset + 1}–{Math.min(tableOffset + pageSize, allRows.length)} of {allRows.length}
+                    </span>
+                    <button
+                      onClick={() => { setTableOffset(tableOffset + pageSize); }}
+                      disabled={!canNext}
+                      className="px-2 py-1 text-xs rounded bg-gray-800 text-gray-400 hover:text-white disabled:opacity-30 transition-colors"
+                    >
+                      Next →
+                    </button>
+                    <button
+                      onClick={() => { setTableExpanded(!tableExpanded); setTableOffset(0); }}
+                      className="px-2.5 py-1 text-xs rounded bg-gray-800 text-gray-400 hover:text-white transition-colors ml-1"
+                    >
+                      {tableExpanded ? 'Show 7' : 'Show 30'}
+                    </button>
+                  </div>
+                </div>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-800/60">
+                      <th className="text-left text-gray-500 font-medium px-5 py-2.5 text-xs">Date</th>
+                      <th className="text-right text-gray-500 font-medium px-5 py-2.5 text-xs">Views</th>
+                      <th className="text-right text-gray-500 font-medium px-5 py-2.5 text-xs">Watch Time</th>
+                      <th className="text-right text-gray-500 font-medium px-5 py-2.5 text-xs">Tokens</th>
+                      <th className="text-right text-gray-500 font-medium px-5 py-2.5 text-xs">Unlocks</th>
+                      <th className="text-right text-gray-500 font-medium px-5 py-2.5 text-xs">Completion</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visibleRows.map((d) => (
+                      <tr key={d.date} className="border-b border-gray-800/40 hover:bg-gray-800/20">
+                        <td className="px-5 py-2.5 text-gray-300">
+                          {new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        </td>
+                        <td className="px-5 py-2.5 text-right text-white font-medium">{d.views.toLocaleString()}</td>
+                        <td className="px-5 py-2.5 text-right text-teal-400">{Math.round(Number(d.watchMinutes))}m</td>
+                        <td className="px-5 py-2.5 text-right text-amber-400">{Number(d.tokensSold).toLocaleString()}</td>
+                        <td className="px-5 py-2.5 text-right text-green-400">{d.unlocks.toLocaleString()}</td>
+                        <td className="px-5 py-2.5 text-right text-gray-400">
+                          {d.completionRate != null ? `${Math.round(d.completionRate * 100)}%` : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })()}
         </div>
       )}
 

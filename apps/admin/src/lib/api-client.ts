@@ -27,6 +27,8 @@ export async function apiFetch<T>(
     throw new Error(error.message ?? `API error: ${response.status}`);
   }
 
+  if (response.status === 204) return undefined as T;
+
   const json = await response.json();
   // Unwrap the { data: T } envelope from the TransformInterceptor
   return ('data' in json ? json.data : json) as T;
@@ -133,8 +135,8 @@ export const adminApi = {
     apiFetch<Season>(`/v1/admin/series/${seriesId}/seasons`, { method: 'POST', body: JSON.stringify(data), token }),
 
   // Author analytics
-  getSeriesAnalytics: (token: string, seriesId: string) =>
-    apiFetch(`/v1/author/series/${seriesId}/analytics`, { token }),
+  getSeriesAnalytics: (token: string, seriesId: string, days?: number) =>
+    apiFetch(`/v1/author/series/${seriesId}/analytics${days ? `?days=${days}` : ''}`, { token }),
 
   // Auth
   login: (email: string, password: string) =>
